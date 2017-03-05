@@ -400,7 +400,7 @@ var rt_scene = (function () {
 
         // transformation for body target position
         // M_{bodytarget-world} =~ M_{ (body-world)+(bodytarget-body) }
-        var m_bodytarget_transform = RTGEO.TO_Euler_ZXY_Matrix4(
+        var m_bodytarget_transform = RTGEO.to_Euler_ZXY_Matrix4(
           RTGEO.degree_to_rad(v_body_rotation_angles_deg.x + ctrl_bodytarget_body_transf.rotateX),
           RTGEO.degree_to_rad(v_body_rotation_angles_deg.y + ctrl_bodytarget_body_transf.rotateY),
           RTGEO.degree_to_rad(v_body_rotation_angles_deg.z + ctrl_bodytarget_body_transf.rotateZ));
