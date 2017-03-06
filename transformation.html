@@ -1,0 +1,1159 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>Transformation</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <link rel="stylesheet" href="KaTeX-0.5.0/katex.min.css">
+    <script src="three.js/build/three.js"></script>
+    <script src="three.js/examples/js/controls/OrbitControls.js"></script>
+    <script src="three.js/examples/js/libs/dat.gui.min.js"></script>
+    <script src="three.js/examples/js/loaders/OBJLoader.js"></script>
+    <script src="KaTeX-0.5.0/katex.min.js"></script>
+
+    <style>
+        body {
+            font-family: Monospace;
+            background-color: #f0f0f0;
+            margin: 0px;
+            overflow: hidden;
+        }
+
+
+        #info {
+            position: absolute;
+            top: 0px;
+            width: 55%;
+            max-height: 95%;
+            padding: 15px 15px 20px 15px;
+            margin: 0;
+            overflow: auto;
+            font-family: Sans-serif;
+            font-size: 16px;
+            display: inline-block;
+        }
+
+
+        #info p {
+            /* render normal text */
+            display: inline;
+            position: relative;
+        }
+
+
+        #info div {
+            /* render math formular with katex */
+            display: inline;
+            position: relative;
+            margin: 0px 3px 0px 3px;
+            line-height: 180%;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container"></div>
+    <!-- webgl container -->
+    <div id="info"></div>
+    <!-- info text       -->
+
+    <script>
+        // an example to play around geometry transformation by mauanlly calculating transformation matrix
+
+        //////////////////////////////////////////
+        ////////// manual transformation   ///////
+        // see also the function updateObjects() /
+        // TODO: do some calculation caching     /
+        //////////////////////////////////////////
+        function degreeToRad(deg) {
+            return deg * Math.PI / 180.0;
+        }
+        function radToDegree(rad) {
+            return rad * 180.0 / Math.PI;
+        }
+        function EulerXYZMatrix4(rotX/*rad*/, rotY, rotZ) {
+            var c1, c2, c3, s1, s2, s3;
+            c1 = Math.cos(rotX); s1 = Math.sin(rotX) * -1.0;
+            c2 = Math.cos(rotY); s2 = Math.sin(rotY) * -1.0;
+            c3 = Math.cos(rotZ); s3 = Math.sin(rotZ) * -1.0;
+            var m = new THREE.Matrix4();
+            m.set(c2 * c3, c2 * s3, -s2, 0,
+                s1 * s2 * c3 - c1 * s3, s1 * s2 * s3 + c1 * c3, c2 * s1, 0,
+                c1 * s2 * c3 + s1 * s3, c1 * s2 * s3 - s1 * c3, c2 * c1, 0,
+                0, 0, 0, 1);
+            return m;
+        }
+        function getEulerXYZAngles(m/*Matrix4*/) {
+            var te = m.elements;
+            var m11 = te[0], m12 = te[4], m13 = te[8];
+            var m21 = te[1], m22 = te[5], m23 = te[9];
+            var m31 = te[2], m32 = te[6], m33 = te[10];
+
+            var _x, _z;
+            var _y = Math.asin(-(m13 < -1 ? -1 : (m13 > 1 ? 1 : m13)));
+
+            if (Math.abs(m13) < 0.99999) {
+                _x = Math.atan2(-m23, m33);
+                _z = Math.atan2(-m12, m11);
+            } else {
+                _x = Math.atan2(m32, m22);
+                _z = 0;
+            }
+            return new THREE.Vector4(_x, _y, _z);
+        }
+        function EulerZYXMatrix4(rotX/*rad*/, rotY, rotZ) {
+            var c1, c2, c3, s1, s2, s3;
+            c1 = Math.cos(rotX); s1 = Math.sin(rotX) * -1.0;
+            c2 = Math.cos(rotY); s2 = Math.sin(rotY) * -1.0;
+            c3 = Math.cos(rotZ); s3 = Math.sin(rotZ) * -1.0;
+            var m = new THREE.Matrix4();
+            m.set(c3 * c2, s3 * c1 + c3 * s2 * s1, s3 * s1 - c3 * s2 * c1, 0,
+                -s3 * c2, c3 * c1 - s3 * s2 * s1, c3 * s1 + s3 * s2 * c1, 0,
+                s2, -s1 * c2, c1 * c2, 0,
+                0, 0, 0, 1);
+            return m;
+        }
+        function getEulerZYXAngles(m/*Matrix4*/) {
+            var te = m.elements;
+            var m11 = te[0], m12 = te[4], m13 = te[8];
+            var m21 = te[1], m22 = te[5], m23 = te[9];
+            var m31 = te[2], m32 = te[6], m33 = te[10];
+
+            var _x, _z;
+            var _y = Math.asin(-(m31 < -1 ? -1 : (m31 > 1 ? 1 : m31)));
+
+            if (Math.abs(m31) < 0.99999) {
+                _x = Math.atan2(m32, m33);
+                _z = Math.atan2(m21, m11);
+            } else {
+                _x = 0;
+                _z = Math.atan2(- m12, m22);
+            }
+            return new THREE.Vector4(_x, _y, _z);
+        }
+        function EulerYXZMatrix4(rotX/*rad*/, rotY, rotZ) {
+            var c1, c2, c3, s1, s2, s3;
+            c1 = Math.cos(rotX); s1 = Math.sin(rotX) * -1.0;
+            c2 = Math.cos(rotY); s2 = Math.sin(rotY) * -1.0;
+            c3 = Math.cos(rotZ); s3 = Math.sin(rotZ) * -1.0;
+            var m = new THREE.Matrix4();
+            m.set(c2 * c3 - s2 * s1 * s3, c2 * s3 + s2 * s1 * c3, -c1 * s2, 0,
+                -c1 * s3, c1 * c3, s1, 0,
+                s2 * c3 + c2 * s1 * s3, s2 * s3 - c2 * s1 * c3, c2 * c1, 0,
+                0, 0, 0, 1);
+            return m;
+        }
+        function getEulerYXZAngles(m/*Matrix4*/) {
+            var te = m.elements;
+            var m11 = te[0], m12 = te[4], m13 = te[8];
+            var m21 = te[1], m22 = te[5], m23 = te[9];
+            var m31 = te[2], m32 = te[6], m33 = te[10];
+
+            var _y, _z;
+            var _x = Math.asin(m23 < -1 ? -1 : (m23 > 1 ? 1 : m23));
+
+            if (Math.abs(m23) < 0.99999) {
+                _y = Math.atan2(m13, m33);
+                _z = Math.atan2(m21, m22);
+            } else {
+                _y = Math.atan2(-m31, m11);
+                _z = 0;
+            }
+            return new THREE.Vector4(_x, _y, _z);
+        }
+        function EulerZXYMatrix4(rotX/*rad*/, rotY, rotZ) {
+            var c1, c2, c3, s1, s2, s3;
+            c1 = Math.cos(rotX); s1 = Math.sin(rotX) * -1.0;
+            c2 = Math.cos(rotY); s2 = Math.sin(rotY) * -1.0;
+            c3 = Math.cos(rotZ); s3 = Math.sin(rotZ) * -1.0;
+            var m = new THREE.Matrix4();
+            m.set(c3 * c2 + s3 * s2 * s1, s3 * c1, -c3 * s2 + s3 * s1 * c2, 0,
+                -s3 * c2 + c3 * s1 * s2, c1 * c3, s3 * s2 + c3 * s1 * c2, 0,
+                c1 * s2, -s1, c1 * c2, 0,
+                0, 0, 0, 1);
+            return m;
+        }
+        function getEulerZXYAngles(m/*Matrix4*/) {
+            var te = m.elements;
+            var m11 = te[0], m12 = te[4], m13 = te[8];
+            var m21 = te[1], m22 = te[5], m23 = te[9];
+            var m31 = te[2], m32 = te[6], m33 = te[10];
+
+            var _y, _z;
+            var _x = Math.asin(m32 < -1 ? -1 : (m32 > 1 ? 1 : m32));
+
+            if (Math.abs(m32) < 0.99999) {
+                _y = Math.atan2(-m31, m33);
+                _z = Math.atan2(-m12, m22);
+            } else {
+                _y = 0;
+                _z = Math.atan2(m21, m11);
+            }
+            return new THREE.Vector4(_x, _y, _z);
+        }
+        //////////////////////////////////////////
+        //////////////////////////////////////////
+        //////////////////////////////////////////
+
+        // variables
+        var camera   /*webgl cam*/,
+            controls /*webgl mouse control*/,
+            renderer /*webgl renderer*/;
+        var scene          /*world*/,
+            base_obj       /*an object which uses manual transformation*/,
+            base_obj_start /*the same object presenting start position*/,
+            base_obj_anim  /*the same object presenting transformation animation*/;
+
+        var animationVector = { rotX: 0, rotY: 0, rotZ: 0, trX: 0, trY: 0, trZ: 0 }/*the vector to track animated transformation*/;
+        var isAnimationReset = true/*flag to notify if the animation needs to be reset*/;
+        var isInfoReset = true/*flag to notify if the info needs to be reset*/;
+        var fps = 30;			/*animation fps*/
+        var then = Date.now();  /*the last time the animation is executed*/
+        var interval = 1000 / fps;/*time interval between animation*/
+
+        // user gui controls
+        var convention = {
+            Euler_XYZ: 0,
+            Euler_YXZ: 1
+        };
+        var intrinsicRotation = {
+            intrinsic: 0,
+            intrinsicOrigin: 1,
+            extrinsic: 2
+        };
+        var intrinsicTranslation = {
+            intrinsic: 0,
+            intrinsicXY: 1,
+            extrinsic: 2
+        };
+        var startPosGuiController = {/*start position of objects*/
+            convention: convention.Euler_XYZ,
+            intrinsicRotation: intrinsicRotation.intrinsic,
+            intrinsicTranslation: intrinsicTranslation.intrinsic,
+            translateX: 0,
+            translateY: 0,
+            translateZ: 0,
+            rotateX: 0,
+            rotateY: 0,
+            rotateZ: 0
+        };
+        var transformationGuiController = {/*transformation of objects*/
+            convention: convention.Euler_XYZ,
+            intrinsicRotation: intrinsicRotation.intrinsic,
+            intrinsicTranslation: intrinsicTranslation.intrinsic,
+            translateX: 0,
+            translateY: 0,
+            translateZ: 0,
+            rotateX: 0,
+            rotateY: 0,
+            rotateZ: 0
+        };
+        var animationGuiController = {/*animation controls*/
+            showInfo: false,
+            showStart: true,
+            showAnimation: false,
+            speed: 5,
+            loop: true
+        };
+        var actionGuiController = {/*actions*/
+            reset: function () { resetGuiController(); isAnimationReset = true; }
+        };
+        // functions - reset all gui controls
+        function resetGuiController() {
+            startPosGuiController.convention = convention.Euler_XYZ;
+            startPosGuiController.intrinsicRotation = intrinsicRotation.intrinsic;
+            startPosGuiController.intrinsicTranslation = intrinsicTranslation.intrinsic;
+            startPosGuiController.translateX = 0;
+            startPosGuiController.translateY = 0;
+            startPosGuiController.translateZ = 0;
+            startPosGuiController.rotateX = 0;
+            startPosGuiController.rotateY = 0;
+            startPosGuiController.rotateZ = 0;
+
+            transformationGuiController.convention = convention.Euler_XYZ;
+            transformationGuiController.intrinsicRotation = intrinsicRotation.intrinsic;
+            transformationGuiController.intrinsicTranslation = intrinsicTranslation.intrinsic;
+            transformationGuiController.translateX = 0;
+            transformationGuiController.translateY = 0;
+            transformationGuiController.translateZ = 0;
+            transformationGuiController.rotateX = 0;
+            transformationGuiController.rotateY = 0;
+            transformationGuiController.rotateZ = 0;
+
+            animationGuiController.showInfo = false;
+            animationGuiController.showStart = true;
+            animationGuiController.showAnimation = false;
+            animationGuiController.speed = 5;
+            animationGuiController.loop = true;
+        }
+
+        // functions - create coordinate lines
+        function buildAxis(src, dst, colorHex, dashed) {
+            var geom = new THREE.Geometry(), mat;
+
+            if (dashed) {
+                mat = new THREE.LineDashedMaterial({ linewidth: 3, color: colorHex, dashSize: 3, gapSize: 3 });
+            } else {
+                mat = new THREE.LineBasicMaterial({ linewidth: 3, color: colorHex });
+            }
+
+            geom.vertices.push(src.clone());
+            geom.vertices.push(dst.clone());
+            geom.computeLineDistances(); // This one is SUPER important, otherwise dashed lines will appear as simple plain lines
+
+            var axis = new THREE.Line(geom, mat, THREE.LinePieces);
+
+            return axis;
+        }
+        function buildAxes(length) {
+            var axes = new THREE.Object3D();
+
+            axes.add(buildAxis(new THREE.Vector3(0, 0, 0), new THREE.Vector3(length, 0, 0), 0xFF0000, false)); // +X
+            axes.add(buildAxis(new THREE.Vector3(0, 0, 0), new THREE.Vector3(-length, 0, 0), 0xFF0000, true)); // -X
+            axes.add(buildAxis(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, length, 0), 0x228b22, false)); // +Y
+            axes.add(buildAxis(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, -length, 0), 0x228b22, true)); // -Y
+            axes.add(buildAxis(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, length), 0x0000FF, false)); // +Z
+            axes.add(buildAxis(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -length), 0x0000FF, true)); // -Z
+
+            return axes;
+        }
+        // add axes labels to the scene
+        function addAxesLabel() {
+
+            // create text
+            var buildText = function (text, font, color, position) {
+                var textGeometry = new THREE.TextGeometry(text, {
+                    size: 15,
+                    height: 3,
+                    font: font
+                });
+                textGeometry.computeBoundingBox();
+                var textMaterial = new THREE.MeshBasicMaterial({ color: color, overdraw: 0.5 });
+                var textMesh = new THREE.Mesh(textGeometry, textMaterial);
+                textMesh.position.set(position.x, position.y, position.z);
+                return textMesh;
+            };
+            //
+
+            var loader = new THREE.FontLoader();
+            loader.load('./three.js/examples/fonts/helvetiker_regular.typeface.json', function (font) {
+                scene.add(buildText("X", font, 0xff0000,
+                    new THREE.Vector3(100, 2, 2)));
+                scene.add(buildText("Y", font, 0x2c602c,
+                    new THREE.Vector3(2, 100, 2)));
+                scene.add(buildText("Z", font, 0x0000ff,
+                    new THREE.Vector3(2, 2, 100)));
+            });
+        }
+
+        // functions - create geomtry objects
+        function buildBaseObjManual() {
+            var geometry = new THREE.BoxGeometry(40, 70, 2);
+            var material = new THREE.MeshLambertMaterial({ color: 0x006699, shading: THREE.FlatShading, overdraw: 0.5 });
+            var obj = new THREE.Mesh(geometry, material);
+
+            var isogeometry = new THREE.SphereGeometry(3, 32, 32);
+            var isomaterial = new THREE.MeshLambertMaterial({ color: 0x996622, shading: THREE.FlatShading, overdraw: 0.5 });
+            var isosphere = new THREE.Mesh(isogeometry, isomaterial);
+            obj.add(isosphere);
+
+            // local axe lines
+            var axes = new THREE.Object3D();
+            axes.add(buildAxis(new THREE.Vector3(0, 0, 1), new THREE.Vector3(10, 0, 1), 0xBB0000, false)); // +X
+            axes.add(buildAxis(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 15, 1), 0x005500, false)); // +Y
+            axes.add(buildAxis(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 11), 0x000099, false)); // +Z
+            obj.add(axes);
+
+            obj.up.set(0, 0, 1);
+            return obj;
+        }
+        function buildBaseObjAnim() {
+            var offset = 0.05;
+            var geometry = new THREE.BoxGeometry(40 + offset, 70 + offset, 2 + offset);
+            var material = new THREE.MeshBasicMaterial({ color: 0xCACC95, wireframe: true, wireframeLinewidth: 2 });
+            var obj = new THREE.Mesh(geometry, material);
+
+            var isogeometry = new THREE.SphereGeometry(3 + offset, 6, 6);
+            var isomaterial = new THREE.MeshBasicMaterial({ color: 0xCACC95, wireframe: true, wireframeLinewidth: 2 });
+            var isosphere = new THREE.Mesh(isogeometry, isomaterial);
+            obj.add(isosphere);
+
+            // local axe lines
+            var axes = new THREE.Object3D();
+            axes.add(buildAxis(new THREE.Vector3(0, 0, 0), new THREE.Vector3(10, 0, 0), 0xCACC95, false)); // +X
+            axes.add(buildAxis(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 15, 0), 0xCACC95, false)); // +Y
+            axes.add(buildAxis(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 10), 0xCACC95, false)); // +Z
+            obj.add(axes);
+
+            obj.up.set(0, 0, 1);
+            return obj;
+        }
+        function buildBaseObjStart() {
+            var offset = 0.1;
+            var geometry = new THREE.BoxGeometry(40 + offset, 70 + offset, 2 + offset);
+            var material = new THREE.MeshBasicMaterial({ color: 0xC390D4, wireframe: true, wireframeLinewidth: 2 });
+            var obj = new THREE.Mesh(geometry, material);
+
+            var isogeometry = new THREE.SphereGeometry(3 + offset, 6, 6);
+            var isomaterial = new THREE.MeshBasicMaterial({ color: 0xC390D4, wireframe: true, wireframeLinewidth: 2 });
+            var isosphere = new THREE.Mesh(isogeometry, isomaterial);
+            obj.add(isosphere);
+
+            // local axe lines
+            var axes = new THREE.Object3D();
+            axes.add(buildAxis(new THREE.Vector3(0, 0, 0), new THREE.Vector3(10, 0, 0), 0xC390D4, false)); // +X
+            axes.add(buildAxis(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 15, 0), 0xC390D4, false)); // +Y
+            axes.add(buildAxis(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 10), 0xC390D4, false)); // +Z
+            obj.add(axes);
+
+            obj.up.set(0, 0, 1);
+            return obj;
+        }
+
+        // function - apply object transformation
+        function updateObjects() {
+            //// define the object start position //////////////////
+            {
+                var transformM = new THREE.Matrix4();
+                // rotation
+                if (startPosGuiController.intrinsicRotation == intrinsicRotation.intrinsic) {
+                    if (startPosGuiController.convention == convention.Euler_XYZ)
+                        transformM = EulerZYXMatrix4(degreeToRad(startPosGuiController.rotateX), degreeToRad(startPosGuiController.rotateY), degreeToRad(startPosGuiController.rotateZ));
+                    else if (startPosGuiController.convention == convention.Euler_YXZ)
+                        transformM = EulerZXYMatrix4(degreeToRad(startPosGuiController.rotateX), degreeToRad(startPosGuiController.rotateY), degreeToRad(startPosGuiController.rotateZ));
+                }
+                else if (startPosGuiController.intrinsicRotation == intrinsicRotation.intrinsicOrigin) {/* the same as the above intrinsic??*/
+                    if (startPosGuiController.convention == convention.Euler_XYZ)
+                        transformM = EulerZYXMatrix4(degreeToRad(startPosGuiController.rotateX), degreeToRad(startPosGuiController.rotateY), degreeToRad(startPosGuiController.rotateZ));
+                    else if (startPosGuiController.convention == convention.Euler_YXZ)
+                        transformM = EulerZXYMatrix4(degreeToRad(startPosGuiController.rotateX), degreeToRad(startPosGuiController.rotateY), degreeToRad(startPosGuiController.rotateZ));
+                }
+                else if (startPosGuiController.intrinsicRotation == intrinsicRotation.extrinsic) {
+                    if (startPosGuiController.convention == convention.Euler_XYZ)
+                        transformM = EulerXYZMatrix4(degreeToRad(startPosGuiController.rotateX), degreeToRad(startPosGuiController.rotateY), degreeToRad(startPosGuiController.rotateZ));
+                    else if (startPosGuiController.convention == convention.Euler_YXZ)
+                        transformM = EulerYXZMatrix4(degreeToRad(startPosGuiController.rotateX), degreeToRad(startPosGuiController.rotateY), degreeToRad(startPosGuiController.rotateZ));
+                }
+                // translation
+                var translationV = /*extrinsic*/new THREE.Vector4(startPosGuiController.translateX, startPosGuiController.translateY, startPosGuiController.translateZ);
+                if (startPosGuiController.intrinsicTranslation == intrinsicTranslation.intrinsic) {
+                    translationV = translationV.applyMatrix4(transformM); // translationV = transformM * translationV
+                }
+                else if (startPosGuiController.intrinsicTranslation == intrinsicTranslation.intrinsicXY) {
+                    var rot_only_z = EulerXYZMatrix4(0, 0, degreeToRad(startPosGuiController.rotateZ)); // no matter wich Euler convetion.
+                    translationV = translationV.applyMatrix4(rot_only_z); // translationV = rot_only_z * translationV
+                }
+
+                // manually set translation into transformation matrix
+                transformM.elements[12] = translationV.x;
+                transformM.elements[13] = translationV.y;
+                transformM.elements[14] = translationV.z;
+                base_obj_start.matrix = transformM;
+                base_obj_start.matrixAutoUpdate = false; // http://threejs.org/docs/#Manual/Introduction/Matrix_transformations
+                base_obj_start.visible = animationGuiController.showStart;
+            }
+
+            /////////// calculate transformed end position /////////
+            {
+                var transformM = new THREE.Matrix4();
+                // rotation
+                if (transformationGuiController.intrinsicRotation == intrinsicRotation.intrinsic) {
+                    if (transformationGuiController.convention == convention.Euler_XYZ)
+                        transformM = EulerZYXMatrix4(degreeToRad(transformationGuiController.rotateX), degreeToRad(transformationGuiController.rotateY), degreeToRad(transformationGuiController.rotateZ));
+                    else if (transformationGuiController.convention == convention.Euler_YXZ)
+                        transformM = EulerZXYMatrix4(degreeToRad(transformationGuiController.rotateX), degreeToRad(transformationGuiController.rotateY), degreeToRad(transformationGuiController.rotateZ));
+
+                    transformM = transformM.multiplyMatrices(base_obj_start.matrix, transformM); // transformM = base_obj_start.matrix * transformM
+                }
+                else if (transformationGuiController.intrinsicRotation == intrinsicRotation.intrinsicOrigin) {
+                    /*the rotation part of the 4x4 matrix from initial transformation*/
+                    var preRotation = new THREE.Matrix4();
+                    preRotation.copy(base_obj_start.matrix);
+                    preRotation.elements[12] = preRotation.elements[13] = preRotation.elements[14] = 0;
+
+                    /*the translation part of the 4x4 matrix from initial transformation*/
+                    var prevRotatedTr = new THREE.Vector4(base_obj_start.matrix.elements[12], base_obj_start.matrix.elements[13], base_obj_start.matrix.elements[14]);
+
+                    /*the !intrinsic! translation of initial transformation*/
+                    var prevTr = new THREE.Vector4();
+                    var invPreRotation = new THREE.Matrix4();
+                    invPreRotation = invPreRotation.getInverse(preRotation);
+                    prevTr = prevRotatedTr.applyMatrix4(invPreRotation);
+
+                    /*the !intrinsic! rotation angles of initial transformation*/
+                    var prevRotAngles/*rad*/ = new THREE.Vector4();
+                    if (transformationGuiController.convention == convention.Euler_XYZ)
+                        prevRotAngles = getEulerZYXAngles(base_obj_start.matrix);
+                    else if (transformationGuiController.convention == convention.Euler_YXZ)
+                        prevRotAngles = getEulerZXYAngles(base_obj_start.matrix);
+
+                    /*the !intrinsic! rotation angles in DEGREE of initial transformation*/
+                    var prevRotAnglesDeg = new THREE.Vector4(radToDegree(prevRotAngles.x), radToDegree(prevRotAngles.y), radToDegree(prevRotAngles.z));
+
+                    /* new accumulated transformation based on intrinsic at origin */
+                    var accumTransformM = new THREE.Matrix4();
+                    /* make rotation with accumulated intrinsic rotation */
+                    if (transformationGuiController.convention == convention.Euler_XYZ)
+                        accumTransformM = EulerZYXMatrix4(degreeToRad(transformationGuiController.rotateX + prevRotAnglesDeg.x), degreeToRad(transformationGuiController.rotateY + prevRotAnglesDeg.y), degreeToRad(transformationGuiController.rotateZ + prevRotAnglesDeg.z));
+                    else if (transformationGuiController.convention == convention.Euler_YXZ)
+                        accumTransformM = EulerZXYMatrix4(degreeToRad(transformationGuiController.rotateX + prevRotAnglesDeg.x), degreeToRad(transformationGuiController.rotateY + prevRotAnglesDeg.y), degreeToRad(transformationGuiController.rotateZ + prevRotAnglesDeg.z));
+
+                    /* redo the !intrinsic! translation of initial transformation again with the new rotation*/
+                    var redoTranslationV = prevTr;
+                    redoTranslationV = redoTranslationV.applyMatrix4(accumTransformM);
+
+                    accumTransformM.elements[12] = redoTranslationV.x;
+                    accumTransformM.elements[13] = redoTranslationV.y;
+                    accumTransformM.elements[14] = redoTranslationV.z;
+
+                    transformM = accumTransformM;
+                }
+                else if (transformationGuiController.intrinsicRotation == intrinsicRotation.extrinsic) {
+                    if (transformationGuiController.convention == convention.Euler_XYZ)
+                        transformM = EulerXYZMatrix4(degreeToRad(transformationGuiController.rotateX), degreeToRad(transformationGuiController.rotateY), degreeToRad(transformationGuiController.rotateZ));
+                    else if (transformationGuiController.convention == convention.Euler_YXZ)
+                        transformM = EulerYXZMatrix4(degreeToRad(transformationGuiController.rotateX), degreeToRad(transformationGuiController.rotateY), degreeToRad(transformationGuiController.rotateZ));
+
+                    transformM = transformM.multiplyMatrices(transformM, base_obj_start.matrix); // transformM = transformM * base_obj_start.matrix
+                }
+                // translation
+                var translationV = new THREE.Vector4(transformationGuiController.translateX, transformationGuiController.translateY, transformationGuiController.translateZ);
+                if (transformationGuiController.intrinsicTranslation == intrinsicTranslation.intrinsic) {
+                    translationV = translationV.applyMatrix4(transformM); // translationV = transformM * translationV
+                }
+                else if (transformationGuiController.intrinsicTranslation == intrinsicTranslation.intrinsicXY) {
+                    var equivalentRotAngles/*rad*/ = new THREE.Vector4();
+                    if (transformationGuiController.convention == convention.Euler_XYZ)
+                        equivalentRotAngles = getEulerZYXAngles(transformM);
+                    else if (transformationGuiController.convention == convention.Euler_YXZ)
+                        equivalentRotAngles = getEulerZXYAngles(transformM);
+
+                    var rot_only_z = EulerXYZMatrix4(0, 0, equivalentRotAngles.z); // no matter wich Euler convetion.
+                    translationV = translationV.applyMatrix4(rot_only_z); // translationV = rot_only_z * translationV
+                    translationV.x += transformM.elements[12];
+                    translationV.y += transformM.elements[13];
+                    translationV.z += transformM.elements[14];
+                }
+                else if (transformationGuiController.intrinsicTranslation == intrinsicTranslation.extrinsic) {
+                    translationV.x += transformM.elements[12];
+                    translationV.y += transformM.elements[13];
+                    translationV.z += transformM.elements[14];
+                }
+
+                // manually set translation into transformation matrix
+                transformM.elements[12] = translationV.x;
+                transformM.elements[13] = translationV.y;
+                transformM.elements[14] = translationV.z;
+                base_obj.matrix = transformM;
+                base_obj.matrixAutoUpdate = false; // http://threejs.org/docs/#Manual/Introduction/Matrix_transformations
+            }
+        }
+        // function - calculate object animation
+        function animateObj() {
+
+            // in case of the animation is restarted
+            if (isAnimationReset == true) {
+                base_obj_anim.matrix = base_obj_start.matrix;
+
+                animationVector.rotX = transformationGuiController.rotateX;
+                animationVector.rotY = transformationGuiController.rotateY;
+                animationVector.rotZ = transformationGuiController.rotateZ;
+                animationVector.trX = transformationGuiController.translateX;
+                animationVector.trY = transformationGuiController.translateY;
+                animationVector.trZ = transformationGuiController.translateZ;
+
+                isAnimationReset = false;
+
+                // animation reset will trigger info reset;
+                isInfoReset = true;
+            }
+
+            // no transformation -> no animation
+            if (transformationGuiController.rotateX == 0 &&
+                transformationGuiController.rotateY == 0 &&
+                transformationGuiController.rotateZ == 0 &&
+                transformationGuiController.translateX == 0 &&
+                transformationGuiController.translateY == 0 &&
+                transformationGuiController.translateZ == 0) {
+                base_obj_anim.matrix = base_obj_start.matrix;
+                base_obj_anim.matrixAutoUpdate = false; // http://threejs.org/docs/#Manual/Introduction/Matrix_transformations
+                base_obj_anim.visible = animationGuiController.showStart;
+                return;
+            }
+
+            // we skip animation if it is not visible
+            base_obj_anim.visible = animationGuiController.showAnimation;
+            if (base_obj_anim.visible == false)
+                return;
+
+            // reset the animatino vector if one animation is done
+            if (animationVector.rotX == 0 && animationVector.rotY == 0 && animationVector.rotZ == 0 &&
+                animationVector.trX == 0 && animationVector.trY == 0 && animationVector.trZ == 0) {
+                // if no loop is enable -> dont run the animation again anymore
+                if (animationGuiController.loop == false)
+                    return;
+
+                // otherwise, reset animation vecor
+                animationVector.rotX = transformationGuiController.rotateX;
+                animationVector.rotY = transformationGuiController.rotateY;
+                animationVector.rotZ = transformationGuiController.rotateZ;
+                animationVector.trX = transformationGuiController.translateX;
+                animationVector.trY = transformationGuiController.translateY;
+                animationVector.trZ = transformationGuiController.translateZ;
+
+                // reset animation to start position
+                base_obj_anim.matrix = base_obj_start.matrix;
+            }
+
+            // define animation step scale
+            var stepRotSize = 0.1 * animationGuiController.speed/*deg*/;
+            var stepTrSize = 0.1 * animationGuiController.speed;
+
+            // calculate the next step
+            var stepVector = { rotX: 0, rotY: 0, rotZ: 0, trX: 0, trY: 0, trZ: 0 };
+            // calculate step vector according to axes order!!
+            if (transformationGuiController.convention == convention.Euler_XYZ) {
+                if (animationVector.rotZ != 0) {
+                    stepVector.rotZ = Math.abs(animationVector.rotZ) < stepRotSize ? animationVector.rotZ : Math.sign(animationVector.rotZ) * stepRotSize;
+                    animationVector.rotZ -= stepVector.rotZ;
+                }
+                else if (animationVector.rotY != 0) {
+                    stepVector.rotY = Math.abs(animationVector.rotY) < stepRotSize ? animationVector.rotY : Math.sign(animationVector.rotY) * stepRotSize;
+                    animationVector.rotY -= stepVector.rotY;
+                }
+                else if (animationVector.rotX != 0) {
+                    stepVector.rotX = Math.abs(animationVector.rotX) < stepRotSize ? animationVector.rotX : Math.sign(animationVector.rotX) * stepRotSize;
+                    animationVector.rotX -= stepVector.rotX;
+                }
+                else if (animationVector.trX != 0) {
+                    stepVector.trX = Math.abs(animationVector.trX) < stepTrSize ? animationVector.trX : Math.sign(animationVector.trX) * stepTrSize;
+                    animationVector.trX -= stepVector.trX;
+                }
+                else if (animationVector.trY != 0) {
+                    stepVector.trY = Math.abs(animationVector.trY) < stepTrSize ? animationVector.trY : Math.sign(animationVector.trY) * stepTrSize;
+                    animationVector.trY -= stepVector.trY;
+                }
+                else if (animationVector.trZ != 0) {
+                    stepVector.trZ = Math.abs(animationVector.trZ) < stepTrSize ? animationVector.trZ : Math.sign(animationVector.trZ) * stepTrSize;
+                    animationVector.trZ -= stepVector.trZ;
+                }
+            }
+            else if (transformationGuiController.convention == convention.Euler_YXZ) {
+                if (animationVector.rotZ != 0) {
+                    stepVector.rotZ = Math.abs(animationVector.rotZ) < stepRotSize ? animationVector.rotZ : Math.sign(animationVector.rotZ) * stepRotSize;
+                    animationVector.rotZ -= stepVector.rotZ;
+                }
+                else if (animationVector.rotX != 0) {
+                    stepVector.rotX = Math.abs(animationVector.rotX) < stepRotSize ? animationVector.rotX : Math.sign(animationVector.rotX) * stepRotSize;
+                    animationVector.rotX -= stepVector.rotX;
+                }
+                else if (animationVector.rotY != 0) {
+                    stepVector.rotY = Math.abs(animationVector.rotY) < stepRotSize ? animationVector.rotY : Math.sign(animationVector.rotY) * stepRotSize;
+                    animationVector.rotY -= stepVector.rotY;
+                }
+                else if (animationVector.trX != 0) {
+                    stepVector.trX = Math.abs(animationVector.trX) < stepTrSize ? animationVector.trX : Math.sign(animationVector.trX) * stepTrSize;
+                    animationVector.trX -= stepVector.trX;
+                }
+                else if (animationVector.trY != 0) {
+                    stepVector.trY = Math.abs(animationVector.trY) < stepTrSize ? animationVector.trY : Math.sign(animationVector.trY) * stepTrSize;
+                    animationVector.trY -= stepVector.trY;
+                }
+                else if (animationVector.trZ != 0) {
+                    stepVector.trZ = Math.abs(animationVector.trZ) < stepTrSize ? animationVector.trZ : Math.sign(animationVector.trZ) * stepTrSize;
+                    animationVector.trZ -= stepVector.trZ;
+                }
+            }
+            //// calculate animation object position //////////////////
+            {
+                var transformM;
+                // rotation
+                if (transformationGuiController.intrinsicRotation == intrinsicRotation.intrinsic) {
+                    if (transformationGuiController.convention == convention.Euler_XYZ)
+                        transformM = EulerZYXMatrix4(degreeToRad(stepVector.rotX), degreeToRad(stepVector.rotY), degreeToRad(stepVector.rotZ));
+                    else if (transformationGuiController.convention == convention.Euler_YXZ)
+                        transformM = EulerZXYMatrix4(degreeToRad(stepVector.rotX), degreeToRad(stepVector.rotY), degreeToRad(stepVector.rotZ));
+
+                    transformM = transformM.multiplyMatrices(base_obj_anim.matrix, transformM); // transformM = base_obj_anim.matrix * transformM
+                }
+                else if (transformationGuiController.intrinsicRotation == intrinsicRotation.intrinsicOrigin) {
+                    /*the rotation part of the 4x4 matrix from the previous transformation*/
+                    var preRotation = new THREE.Matrix4();
+                    preRotation.copy(base_obj_anim.matrix);
+                    preRotation.elements[12] = preRotation.elements[13] = preRotation.elements[14] = 0;
+
+                    /*the translation part of the 4x4 matrix from previous transformation*/
+                    var prevRotatedTr = new THREE.Vector4(base_obj_anim.matrix.elements[12], base_obj_anim.matrix.elements[13], base_obj_anim.matrix.elements[14]);
+
+                    /*the !intrinsic! translation of previous transformation*/
+                    var prevTr = new THREE.Vector4();
+                    var invPreRotation = new THREE.Matrix4();
+                    invPreRotation = invPreRotation.getInverse(preRotation);
+                    prevTr = prevRotatedTr.applyMatrix4(invPreRotation);
+
+                    /*the !intrinsic! rotation angles of previous transformation*/
+                    var prevRotAngles/*rad*/ = new THREE.Vector4();
+                    if (transformationGuiController.convention == convention.Euler_XYZ)
+                        prevRotAngles = getEulerZYXAngles(base_obj_anim.matrix);
+                    else if (transformationGuiController.convention == convention.Euler_YXZ)
+                        prevRotAngles = getEulerZXYAngles(base_obj_anim.matrix);
+
+                    /*the !intrinsic! rotation angles in DEGREE of previous transformation*/
+                    var prevRotAnglesDeg = new THREE.Vector4(radToDegree(prevRotAngles.x), radToDegree(prevRotAngles.y), radToDegree(prevRotAngles.z));
+
+                    /* new accumulated transformation based on intrinsic at origin */
+                    var accumTransformM = new THREE.Matrix4();
+                    /* make rotation with accumulated intrinsic rotation */
+                    if (transformationGuiController.convention == convention.Euler_XYZ)
+                        accumTransformM = EulerZYXMatrix4(degreeToRad(stepVector.rotX + prevRotAnglesDeg.x), degreeToRad(stepVector.rotY + prevRotAnglesDeg.y), degreeToRad(stepVector.rotZ + prevRotAnglesDeg.z));
+                    else if (transformationGuiController.convention == convention.Euler_YXZ)
+                        accumTransformM = EulerZXYMatrix4(degreeToRad(stepVector.rotX + prevRotAnglesDeg.x), degreeToRad(stepVector.rotY + prevRotAnglesDeg.y), degreeToRad(stepVector.rotZ + prevRotAnglesDeg.z));
+
+                    /* redo the !intrinsic! translation of previous transformation again with the new rotation*/
+                    var redoTranslationV = prevTr;
+                    redoTranslationV = redoTranslationV.applyMatrix4(accumTransformM);
+
+                    accumTransformM.elements[12] = redoTranslationV.x;
+                    accumTransformM.elements[13] = redoTranslationV.y;
+                    accumTransformM.elements[14] = redoTranslationV.z;
+
+                    transformM = accumTransformM;
+                }
+                else if (transformationGuiController.intrinsicRotation == intrinsicRotation.extrinsic) {
+                    if (transformationGuiController.convention == convention.Euler_XYZ)
+                        transformM = EulerXYZMatrix4(degreeToRad(stepVector.rotX), degreeToRad(stepVector.rotY), degreeToRad(stepVector.rotZ));
+                    else if (transformationGuiController.convention == convention.Euler_YXZ)
+                        transformM = EulerYXZMatrix4(degreeToRad(stepVector.rotX), degreeToRad(stepVector.rotY), degreeToRad(stepVector.rotZ));
+
+                    transformM = transformM.multiplyMatrices(transformM, base_obj_anim.matrix); // transformM = transformM * base_obj_anim.matrix
+                }
+                // translation
+                var translationV = new THREE.Vector4(stepVector.trX, stepVector.trY, stepVector.trZ);
+                if (transformationGuiController.intrinsicTranslation == intrinsicTranslation.intrinsic) {
+                    translationV = translationV.applyMatrix4(transformM); // translationV = transformM * translationV
+                }
+                else if (transformationGuiController.intrinsicTranslation == intrinsicTranslation.extrinsic) {
+                    translationV.x += transformM.elements[12];
+                    translationV.y += transformM.elements[13];
+                    translationV.z += transformM.elements[14];
+                }
+                else if (transformationGuiController.intrinsicTranslation == intrinsicTranslation.intrinsicXY) {
+                    var equivalentRotAngles/*rad*/ = new THREE.Vector4();
+                    if (transformationGuiController.convention == convention.Euler_XYZ)
+                        equivalentRotAngles = getEulerZYXAngles(base_obj_anim.matrix);
+                    else if (transformationGuiController.convention == convention.Euler_YXZ)
+                        equivalentRotAngles = getEulerZXYAngles(base_obj_anim.matrix);
+
+                    var rot_only_z = EulerXYZMatrix4(0, 0, equivalentRotAngles.z); // no matter wich Euler convetion.
+                    translationV = translationV.applyMatrix4(rot_only_z); // translationV = rot_only_z * translationV
+                    translationV.x += transformM.elements[12];
+                    translationV.y += transformM.elements[13];
+                    translationV.z += transformM.elements[14];
+                }
+                // manually set translation into transformation matrix
+                transformM.elements[12] = translationV.x;
+                transformM.elements[13] = translationV.y;
+                transformM.elements[14] = translationV.z;
+                base_obj_anim.matrix = transformM;
+                base_obj_anim.matrixAutoUpdate = false; // http://threejs.org/docs/#Manual/Introduction/Matrix_transformations
+                base_obj_anim.visible = animationGuiController.showAnimation;
+            }
+        }
+        // function - update info text
+        function updateInfo() {
+            // we don't render info if it is not enable
+            if (animationGuiController.showInfo == false) {
+                document.getElementById('info').innerHTML = "";
+                document.getElementById('info').style.background = "none";
+                return;
+            }
+
+            document.getElementById('info').style.background = "rgba(0, 0, 0, 0.05)";
+
+            // we update info only once on demand
+            if (isInfoReset == true)
+                isInfoReset = false;
+            else
+                return;
+
+            // TODO: clean up the code here
+
+            // calculate labels
+            var startRot, transRot,
+                startRotDesc, transRotDesc,
+                startRotIntrinsic, transRotIntrinsic,
+                startTr, transTr,
+                startTrIntrinsic, transTrIntrinsic,
+                w1, w2, w1_m, w2_m, w2_detail, w2_detail_rot, w2_detail_tr,
+                startRotPart, startTrPart,
+                transRotPart, transTrPart, transTrTempPart;
+            var intrinsicOriginNote = "", intrinsicOriginNewTransform = "", intrinsicXYNote = "",
+                intrinsicOriginStartRot, intrinsicOriginStartTr,
+                intrinsicOriginNewRot, intrinsicXYRot;
+            {//start position
+                var x, y, z;
+                x = startPosGuiController.rotateX;
+                y = startPosGuiController.rotateY;
+                z = startPosGuiController.rotateZ;
+                if (startPosGuiController.intrinsicRotation == intrinsicRotation.intrinsic) {
+                    startRotIntrinsic = "intrinsic";
+                    if (startPosGuiController.convention == convention.Euler_XYZ) {
+                        startRot = "R'_{zyx}(\\gamma',\\beta',\\alpha') = R'_{zyx}(" + z + ", " + y + ", " + x + ")";
+                        startRotDesc = "around Z at first, then Y, X";
+                    }
+                    else if (startPosGuiController.convention == convention.Euler_YXZ) {
+                        startRot = "R'_{zxy}(\\gamma',\\alpha',\\beta') = R'_{zxy}(" + z + ", " + x + ", " + y + ")";
+                        startRotDesc = "around Z at first, then X, Y";
+                    }
+                }
+                else if (startPosGuiController.intrinsicRotation == intrinsicRotation.intrinsicOrigin) {
+                    startRotIntrinsic = "intrinsic";
+                    if (startPosGuiController.convention == convention.Euler_XYZ) {
+                        startRot = "R'_{zyx}(\\gamma',\\beta',\\alpha') = R'_{zyx}(" + z + ", " + y + ", " + x + ")";
+                        startRotDesc = "around fixed Z at first, then rotated Y, rotated X at the origin";
+                    }
+                    else if (startPosGuiController.convention == convention.Euler_YXZ) {
+                        startRot = "R'_{zxy}(\\gamma',\\alpha',\\beta') = R'_{zxy}(" + z + ", " + x + ", " + y + ")";
+                        startRotDesc = "around fixed Z at first, then rotated X, rotated Y at the origin";
+                    }
+                }
+                else if (startPosGuiController.intrinsicRotation == intrinsicRotation.extrinsic) {
+                    startRotIntrinsic = "extrinsic";
+                    if (startPosGuiController.convention == convention.Euler_XYZ) {
+                        startRot = "R'_{xyz}(\\alpha',\\beta',\\gamma') = R'_{xyz}(" + x + ", " + y + ", " + z + ")";
+                        startRotDesc = "around Z at first, then Y, X";
+                    }
+                    else if (startPosGuiController.convention == convention.Euler_YXZ) {
+                        startRot = "R'_{yxz}(\\beta',\\alpha',\\gamma') = R'_{yxz}(" + y + ", " + x + ", " + z + ")";
+                        startRotDesc = "around Z at first, then X, Y";
+                    }
+                }
+                x = startPosGuiController.translateX;
+                y = startPosGuiController.translateY;
+                z = startPosGuiController.translateZ;
+                startTr = "[" + x + "," + y + "," + z + "]^T";
+
+                startTrPart = "T'";
+                startTrIntrinsic = "extrinsic";
+                if (startPosGuiController.intrinsicTranslation == intrinsicTranslation.intrinsic) {
+                    startTrPart = "R'T'";
+                    startTrIntrinsic = "intrinsic";
+                }
+                else if (startPosGuiController.intrinsicTranslation == intrinsicTranslation.intrinsicXY) {
+                    startTrPart = "R'_{z}T'";
+                    startTrIntrinsic = "intrinsic on XY plane";
+                }
+
+                startRotPart = "R'";
+                w1 = "=" + startRotPart + "P+" + startTrPart;
+                w1_m = "\\cong\\begin{bmatrix} " +
+                    startRotPart + "&" + startTrPart + "\\\\" +
+                    "0&1\\end{bmatrix}" +
+                    "\\begin{bmatrix} " +
+                    "P\\\\" +
+                    "1\\end{bmatrix}";
+            }
+            {//transformation
+                var x, y, z;
+                x = transformationGuiController.rotateX;
+                y = transformationGuiController.rotateY;
+                z = transformationGuiController.rotateZ;
+                if (transformationGuiController.intrinsicRotation == intrinsicRotation.intrinsic) {
+                    transRotIntrinsic = "intrinsic";
+                    if (transformationGuiController.convention == convention.Euler_XYZ) {
+                        transRot = "R''_{zyx}(\\gamma'',\\beta'',\\alpha'') = R''_{zyx}(" + z + ", " + y + ", " + x + ")";
+                        transRotDesc = "around Z at first, then Y, X";
+                        intrinsicXYRot = "\\hat{R}_{zyx}(\\hat{\\gamma},\\hat{\\beta},\\hat{\\alpha})";
+                    }
+                    else if (transformationGuiController.convention == convention.Euler_YXZ) {
+                        transRot = "R''_{zxy}(\\gamma'',\\alpha'',\\beta'') = R''_{zxy}(" + z + ", " + x + ", " + y + ")";
+                        transRotDesc = "around Z at first, then X, Y";
+                        intrinsicXYRot = "\\hat{R}_{zxy}(\\hat{\\gamma},\\hat{\\alpha},\\hat{\\beta})";
+                    }
+                    transRotPart = "R'R''";
+                    transTrTempPart = startTrPart;
+                    w2_detail_rot = "M'\\begin{bmatrix}R''&0\\\\0&1\\end{bmatrix}";
+                }
+                else if (transformationGuiController.intrinsicRotation == intrinsicRotation.intrinsicOrigin) {
+                    transRotIntrinsic = "intrinsic";
+                    if (transformationGuiController.convention == convention.Euler_XYZ) {
+                        transRot = "R''_{zyx}(\\gamma'',\\beta'',\\alpha'') = R''_{zyx}(" + z + ", " + y + ", " + x + ")";
+                        transRotDesc = "around fixed Z at first, then rotated Y, rotated X at the origin";
+                        intrinsicOriginStartRot = "\\bar{R'}_{zyx}(\\bar{\\gamma'},\\bar{\\beta'},\\bar{\\alpha'})";
+                        intrinsicOriginNewRot = "\\bar{R''}_{zyx}(\\bar{\\gamma'}+\\gamma'',\\bar{\\beta'}+\\beta'',\\bar{\\alpha'}+\\alpha'')";
+                    }
+                    else if (transformationGuiController.convention == convention.Euler_YXZ) {
+                        transRot = "R''_{zxy}(\\gamma'',\\alpha'',\\beta'') = R''_{zxy}(" + z + ", " + x + ", " + y + ")";
+                        transRotDesc = "around fixed Z at first, then rotated X, rotated Y at the origin";
+                        intrinsicOriginStartRot = "\\bar{R'}_{zxy}(\\bar{\\gamma'},\\bar{\\alpha'},\\bar{\\beta'})";
+                        intrinsicOriginNewRot = "\\bar{R''}_{zxy}(\\bar{\\gamma'}+\\gamma'',\\bar{\\alpha'}+\\alpha'',\\bar{\\beta'}+\\beta'')";
+                    }
+                    transRotPart = "\\bar{R''}";
+                    transTrTempPart = "\\bar{R''}\\bar{T'}";
+                    w2_detail_rot = "\\begin{bmatrix}\\bar{R''}&\\bar{R''}\\bar{T'}\\\\0&1\\end{bmatrix}";
+
+                    intrinsicOriginStartTr = "{\\bar{R'}}^{-1}" + startTrPart;
+
+                    intrinsicOriginNote = "<br><div id='isocentric_R1'></div> and <div id='isocentric_T1'></div> " +
+                        "can be converted to an equivalent transformation by a rotation " +
+                        "<div id='isocentric_R1head'></div> (intrinsic, " + transRotDesc + ") " +
+                        "followed by a translation <div id='isocentric_T1head'></div> (intrinsic)." +
+                        "<br><div id='isocentric_newR1head'></div><br><div id='isocentric_newT1head'></div>";
+
+                    intrinsicOriginNewTransform = "<br><div id='isocentric_newR2head'></div>";
+                }
+                else if (transformationGuiController.intrinsicRotation == intrinsicRotation.extrinsic) {
+                    transRotIntrinsic = "extrinsic";
+                    if (transformationGuiController.convention == convention.Euler_XYZ) {
+                        transRot = "R''_{xyz}(\\alpha'',\\beta'',\\gamma'') = R''_{xyz}(" + x + ", " + y + ", " + z + ")";
+                        transRotDesc = "around Z at first, then Y, X";
+                        intrinsicXYRot = "\\hat{R}_{xyz}(\\hat{\\alpha},\\hat{\\beta},\\hat{\\gamma})";
+                    }
+                    else if (transformationGuiController.convention == convention.Euler_YXZ) {
+                        transRot = "R''_{yxz}(\\beta'',\\alpha'',\\gamma'') = R''_{yxz}(" + y + ", " + x + ", " + z + ")";
+                        transRotDesc = "around Z at first, then X, Y";
+                        intrinsicXYRot = "\\hat{R}_{yxz}(\\hat{\\hat{\\beta},\\alpha},\\hat{\\gamma})";
+                    }
+                    transRotPart = "R''R'";
+                    transTrTempPart = "R''" + startTrPart;
+                    w2_detail_rot = "\\begin{bmatrix}R''&0\\\\0&1\\end{bmatrix}M'";
+                }
+                x = transformationGuiController.translateX;
+                y = transformationGuiController.translateY;
+                z = transformationGuiController.translateZ;
+                transTr = "[" + x + "," + y + "," + z + "]^T";
+
+                // translation
+                if (transformationGuiController.intrinsicTranslation == intrinsicTranslation.intrinsic) {
+                    transTrPart = transTrTempPart + "+" + transRotPart + "T''";
+                    w2_detail_tr = w2_detail_rot + "\\begin{bmatrix}T''\\\\1\\end{bmatrix}";
+                    transTrIntrinsic = "intrinsic";
+                }
+                else if (transformationGuiController.intrinsicTranslation == intrinsicTranslation.extrinsic) {
+                    transTrPart = transTrTempPart + "+" + "T''";
+                    w2_detail_tr = "\\text{TranslationOf}(" + w2_detail_rot + ")+\\begin{bmatrix}T''\\\\1\\end{bmatrix}";
+                    transTrIntrinsic = "extrinsic";
+                }
+                else if (transformationGuiController.intrinsicTranslation == intrinsicTranslation.intrinsicXY) {
+                    var new_rot_z_label;
+                    if (transformationGuiController.intrinsicRotation == intrinsicRotation.intrinsicOrigin)
+                        new_rot_z_label = "\\bar{R''}_z";
+                    else {
+                        new_rot_z_label = "\\hat{R}_z";
+                        intrinsicXYNote = "<br>The new rotation <div id='trinsicXY_Rhat0'></div>" +
+                            "can be converted to an equivalent rotation " +
+                            "<div id='trinsicXY_Rhat1'></div> (intrinsic, " + transRotDesc + ")" +
+                            "<br><div id='trinsicXY_Rhat2'></div>";
+                    }
+                    transTrPart = transTrTempPart + "+" + new_rot_z_label + "T''";
+                    w2_detail_tr = "\\text{TranslationOf}(" + w2_detail_rot + ")+" + "\\begin{bmatrix}" + new_rot_z_label + "&0\\\\0&1\\end{bmatrix}\\begin{bmatrix}T''\\\\1\\end{bmatrix}";
+                    transTrIntrinsic = "intrinsic on XY plane";
+                }
+                w2 = "=" + transRotPart + "P+" + transTrPart;
+                w2_m = "\\cong\\begin{bmatrix} " +
+                    transRotPart + "&" + transTrPart + "\\\\" +
+                    "0&1\\end{bmatrix}" +
+                    "\\begin{bmatrix} " +
+                    "P\\\\" +
+                    "1\\end{bmatrix}";
+                w2_detail = "\\cong\\text{RotationOf}(" + w2_detail_rot + ") \\begin{bmatrix}P\\\\1\\end{bmatrix}" +
+                    "+" + w2_detail_tr;
+            }
+
+            document.getElementById('info').innerHTML =
+                "<p>" +
+                "A rigid body <div id='_tex1'></div> is placed in the world coordinate at the beginning as " +
+                "<div id='_tex2'></div> by a rotation <div id='_tex3'></div> (" + startRotIntrinsic + ", " + startRotDesc + ")" +
+                " followed by a translation <div id='_tex4'></div> " + "(" + startTrIntrinsic + ")" +
+                ". Then, the <div id='_tex5'></div> is transformed to <div id='_tex6'></div> " +
+                "by a rotation <div id='_tex7'></div> (" + transRotIntrinsic + ", " + transRotDesc + ")" +
+                " followed by a translation <div id='_tex8'></div>" + "(" + transTrIntrinsic + ")" +
+                ". A rotation <div id='_text_r'></div> is represented as a 3x3 rotation matrix calculated with Euler angles and " +
+                "an <div id='_text_m'></div> represent a 4x4 transformation matrix." +
+                "<br><div id='_tex9'></div>" +
+                "<br><div id='_tex10'></div>" +
+                "<br><div id='_tex13'></div>" +
+                "<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<div id='_tex13-1'></div>" +
+                "<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<div id='_tex14'></div>" +
+                intrinsicOriginNote +
+                "<br><div id='_tex11'></div>" +
+                "<br><div id='_tex12'></div>" +
+                intrinsicOriginNewTransform +
+                intrinsicXYNote +
+                "<br><div id='_tex15'></div>" +
+                "<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<div id='_tex16'></div>" +
+                "<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<div id='_tex17'></div>" +
+                "</p>"
+                ;
+            katex.render("R", document.getElementById('_text_r'));
+            katex.render("M", document.getElementById('_text_m'));
+            katex.render("P", document.getElementById('_tex1'));
+            katex.render("P_{w1}", document.getElementById('_tex2'));
+            katex.render("R'", document.getElementById('_tex3'));
+            katex.render("T'", document.getElementById('_tex4'));
+            katex.render("P_{w1}", document.getElementById('_tex5'));
+            katex.render("P_{w2}", document.getElementById('_tex6'));
+            katex.render("R''", document.getElementById('_tex7'));
+            katex.render("T''", document.getElementById('_tex8'));
+            katex.render("R'=" + startRot, document.getElementById('_tex9'));
+            katex.render("T'=" + startTr, document.getElementById('_tex10'));
+            katex.render("P_{w1} \\cong M'\\begin{bmatrix}P\\\\1\\end{bmatrix}", document.getElementById('_tex13'));
+            katex.render(w1_m, document.getElementById('_tex13-1'));
+            katex.render(w1, document.getElementById('_tex14'));
+            if (intrinsicOriginNote != "") {
+                katex.render("R'", document.getElementById('isocentric_R1'));
+                katex.render("T'", document.getElementById('isocentric_T1'));
+                katex.render("\\bar{R'}", document.getElementById('isocentric_R1head'));
+                katex.render("\\bar{T'}", document.getElementById('isocentric_T1head'));
+                katex.render("\\bar{R'}=" + intrinsicOriginStartRot + "=R'", document.getElementById('isocentric_newR1head'));
+                katex.render("\\bar{T'}=" + intrinsicOriginStartTr, document.getElementById('isocentric_newT1head'));
+            }
+            katex.render("R''=" + transRot, document.getElementById('_tex11'));
+            katex.render("T''=" + transTr, document.getElementById('_tex12'));
+            katex.render("P_{w2}" + w2_detail, document.getElementById('_tex15'));
+            if (intrinsicOriginNewTransform != "") {
+                katex.render("\\bar{R''}=" + intrinsicOriginNewRot, document.getElementById('isocentric_newR2head'));
+            }
+            if (intrinsicXYNote != "") {
+                katex.render(transRotPart, document.getElementById('trinsicXY_Rhat0'));
+                katex.render("\\hat{R}", document.getElementById('trinsicXY_Rhat1'));
+                katex.render("\\hat{R}=" + transRotPart + "=" + intrinsicXYRot, document.getElementById('trinsicXY_Rhat2'));
+            }
+            katex.render(w2_m, document.getElementById('_tex16'));
+            katex.render(w2, document.getElementById('_tex17'));
+        };
+        // init GUI
+        function initGUI() {
+
+            var gui = new dat.GUI();
+
+            var folderStart = gui.addFolder('Start Position');
+            folderStart.add(startPosGuiController, "rotateX", -30, 30).step(1).listen().onChange(function () { isAnimationReset = true; });
+            folderStart.add(startPosGuiController, "rotateY", -30, 30).step(1).listen().onChange(function () { isAnimationReset = true; });
+            folderStart.add(startPosGuiController, "rotateZ", -90, 90).step(1).listen().onChange(function () { isAnimationReset = true; });
+            folderStart.add(startPosGuiController, "translateX", -60, 60).step(1).listen().onChange(function () { isAnimationReset = true; });
+            folderStart.add(startPosGuiController, "translateY", -60, 60).step(1).listen().onChange(function () { isAnimationReset = true; });
+            folderStart.add(startPosGuiController, "translateZ", -60, 60).step(1).listen().onChange(function () { isAnimationReset = true; });
+            folderStart.add(startPosGuiController, "convention", convention).listen().onChange(function () { isAnimationReset = true; });
+            folderStart.add(startPosGuiController, "intrinsicRotation", intrinsicRotation).listen().onChange(function () { isAnimationReset = true; });
+            folderStart.add(startPosGuiController, "intrinsicTranslation", intrinsicTranslation).listen().onChange(function () { isAnimationReset = true; });
+            folderStart.open();
+
+            var folderTx = gui.addFolder('Transformation');
+            folderTx.add(transformationGuiController, "rotateX", -30, 30).step(1).listen().onChange(function () { isAnimationReset = true; });
+            folderTx.add(transformationGuiController, "rotateY", -30, 30).step(1).listen().onChange(function () { isAnimationReset = true; });
+            folderTx.add(transformationGuiController, "rotateZ", -90, 90).step(1).listen().onChange(function () { isAnimationReset = true; });
+            folderTx.add(transformationGuiController, "translateX", -60, 60).step(1).listen().onChange(function () { isAnimationReset = true; });
+            folderTx.add(transformationGuiController, "translateY", -60, 60).step(1).listen().onChange(function () { isAnimationReset = true; });
+            folderTx.add(transformationGuiController, "translateZ", -60, 60).step(1).listen().onChange(function () { isAnimationReset = true; });
+            folderTx.add(transformationGuiController, "convention", convention).listen().onChange(function () { isAnimationReset = true; });
+            folderTx.add(transformationGuiController, "intrinsicRotation", intrinsicRotation).listen().onChange(function () { isAnimationReset = true; });
+            folderTx.add(transformationGuiController, "intrinsicTranslation", intrinsicTranslation).listen().onChange(function () { isAnimationReset = true; });
+            folderTx.open();
+
+            var folderAnim = gui.addFolder('Display/Animation');
+            folderAnim.add(animationGuiController, "showInfo").listen().onChange(function () { isInfoReset = true; });
+            folderAnim.add(animationGuiController, "showStart").listen();
+            folderAnim.add(animationGuiController, "showAnimation").listen().onChange(function () { isAnimationReset = true; }); /* also trigger a reset*/
+            folderAnim.add(animationGuiController, "speed", 1, 10).step(1).listen();
+            folderAnim.add(animationGuiController, "loop").listen();
+            folderAnim.close();
+
+            var folderAct = gui.addFolder('Action');
+            folderAct.add(actionGuiController, "reset").name("[    RESET    ]");
+            folderAct.open();
+
+            gui.open();
+        }
+
+        // function - init everything
+        function init() {
+
+            // init gui controls
+            initGUI();
+
+            // init container
+            var container = document.getElementById('container');
+
+            // init camera
+            camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 1, 10000);
+            camera.position.set(300, -300, 300);
+            camera.up.set(0, 0, 1);
+            camera.lookAt(new THREE.Vector3(0, 0, 0));
+
+            // init scene
+            scene = new THREE.Scene();
+            scene.up.set(0, 0, 1);
+
+            // init light
+            var light = new THREE.PointLight(0xffffff, 1.5);
+            light.up.set(0, 0, 1);
+            light.position.set(1000, 1000, 2000);
+            scene.add(light);
+
+            // init coordinate axes
+            scene.add(buildAxes(1000));
+            addAxesLabel();
+
+            // init obbjects
+            base_obj = buildBaseObjManual();
+            base_obj_start = buildBaseObjStart();
+            base_obj_anim = buildBaseObjAnim();
+            scene.add(base_obj);
+            scene.add(base_obj_start);
+            scene.add(base_obj_anim);
+
+            // init renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true }); // WebGLRenderer CanvasRenderer
+            renderer.setClearColor(0xf0f0f0);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            container.appendChild(renderer.domElement);
+
+            // init control
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+            window.addEventListener('resize', onWindowResize, false);
+
+        }
+
+        // animation/window routines
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // do animation under a specific max fps
+            var now = Date.now();
+            var delta = now - then;
+            if (delta > interval) {
+                then = now - (delta % interval);
+            }
+            else {
+                return;
+            }
+
+            controls.update();
+            updateObjects();
+            animateObj();
+            updateInfo();
+
+            render();
+        }
+        function render() {
+            renderer.render(scene, camera);
+        }
+
+        // entry point - start scene
+        init();
+        animate();
+    </script>
+
+</body>
+
+</html>
