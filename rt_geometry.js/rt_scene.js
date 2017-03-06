@@ -4,7 +4,7 @@ var rt_scene = (function () {
   /* ***** VARIABLES      **** */
   /* ************************* */
 
-  var scene,       /*webgl scene*/
+  var scene,     /*webgl scene*/
     camera,      /*webgl cam*/
     controls,    /*webgl mouse control*/
     renderer;    /*webgl renderer*/
@@ -20,10 +20,10 @@ var rt_scene = (function () {
     obj_body,         /* Body: on top of the obj_top, it represent a body */
     obj_body_target,
     obj_helper_plane, /* represent a helper plane e.g. a projection of the body onto XY plane */
-    obj_model = new THREE.Object3D(), // 3d body model 
+    obj_model = new THREE.Object3D(), // 3d body model
     obj_model_target = new THREE.Object3D();
 
-  var fps = 30,			      /*animation fps*/
+  var fps = 30,           /*animation fps*/
     then = Date.now(),    /*the last time the animation is executed*/
     interval = 1000 / fps;/*time interval between animation (ms)*/
 
@@ -74,8 +74,8 @@ var rt_scene = (function () {
     default_opacity: 0.15
   };
 
-  var enum_body_target_transf_mode = {// enum
-    INTRINSIC_ORIGIN_Zxy: 0,       // 
+  var enum_transf_mode = {// enum
+    INTRINSIC_ORIGIN_Zxy: 0,       //
     INTRINSIC_ORIGIN_zxy: 1        //
   };
 
@@ -86,27 +86,29 @@ var rt_scene = (function () {
     rotateZ: 0.0,
     translateX: 0.0,
     translateY: -80.0,
-    translateZ: -20.0
+    translateZ: -20.0,
+    mode: enum_transf_mode.INTRINSIC_ORIGIN_Zxy
   };
-  var ctrl_body_setup_error = {// relative to obj_body
-    rotateX: 0.0,
-    rotateY: 0.0,
-    rotateZ: 0.0,
-    translateX: 0.0,
-    translateY: 0.0,
-    translateZ: 0.0
-  };
-  var ctrl_bodytarget_body_transf = {// relative to obj_body               
+  var ctrl_body_setup_error = {//
     rotateX: 0.0,
     rotateY: 0.0,
     rotateZ: 0.0,
     translateX: 0.0,
     translateY: 0.0,
     translateZ: 0.0,
-    mode: enum_body_target_transf_mode.INTRINSIC_ORIGIN_Zxy,
+    mode: enum_transf_mode.INTRINSIC_ORIGIN_Zxy
+  };
+  var ctrl_body_pos_correction_transf = {//
+    rotateX: 0.0,
+    rotateY: 0.0,
+    rotateZ: 0.0,
+    translateX: 0.0,
+    translateY: 0.0,
+    translateZ: 0.0,
+    mode: enum_transf_mode.INTRINSIC_ORIGIN_Zxy
   };
   var ctrl_gui = {// gui control
-    showHelperPlane: true,
+    showHelperPlane: false,
     showModel: true
   };
 
@@ -125,33 +127,35 @@ var rt_scene = (function () {
     folderCouchTop.add(ctrl_top_world_transf, "translateX", -50.0, 50.0).step(0.1).listen().onChange(function () { updateSceneObjects(); });
     folderCouchTop.add(ctrl_top_world_transf, "translateY", -120.0, -40.0).step(0.1).listen().onChange(function () { updateSceneObjects(); });
     folderCouchTop.add(ctrl_top_world_transf, "translateZ", -60.0, 10.0).step(0.1).listen().onChange(function () { updateSceneObjects(); });
+    folderCouchTop.add(ctrl_top_world_transf, "mode", enum_transf_mode).listen().onChange(function () { updateSceneObjects(); });
     folderCouchTop.open();
 
-    var folderBody = gui.addFolder('Body Setup [couch top coordinates]');
-    folderBody.add(ctrl_body_setup_error, "rotateX", -10.0, 10.0).step(0.1).listen().onChange(function () { updateSceneObjects(); });
-    folderBody.add(ctrl_body_setup_error, "rotateY", -10.0, 10.0).step(0.1).listen().onChange(function () { updateSceneObjects(); });
-    folderBody.add(ctrl_body_setup_error, "rotateZ", -10.0, 10.0).step(0.1).listen().onChange(function () { updateSceneObjects(); });
-    folderBody.add(ctrl_body_setup_error, "translateX", -30.0, 30.0).step(0.1).listen().onChange(function () { updateSceneObjects(); });
-    folderBody.add(ctrl_body_setup_error, "translateY", -30.0, 30.0).step(0.1).listen().onChange(function () { updateSceneObjects(); });
-    folderBody.add(ctrl_body_setup_error, "translateZ", -30.0, 30.0).step(0.1).listen().onChange(function () { updateSceneObjects(); });
-    folderBody.close();
+    var folderBodySetupError = gui.addFolder('Body Setup Error');
+    folderBodySetupError.add(ctrl_body_setup_error, "rotateX", -10.0, 10.0).step(0.1).listen().onChange(function () { updateSceneObjects(); });
+    folderBodySetupError.add(ctrl_body_setup_error, "rotateY", -10.0, 10.0).step(0.1).listen().onChange(function () { updateSceneObjects(); });
+    folderBodySetupError.add(ctrl_body_setup_error, "rotateZ", -10.0, 10.0).step(0.1).listen().onChange(function () { updateSceneObjects(); });
+    folderBodySetupError.add(ctrl_body_setup_error, "translateX", -30.0, 30.0).step(0.1).listen().onChange(function () { updateSceneObjects(); });
+    folderBodySetupError.add(ctrl_body_setup_error, "translateY", -30.0, 30.0).step(0.1).listen().onChange(function () { updateSceneObjects(); });
+    folderBodySetupError.add(ctrl_body_setup_error, "translateZ", -30.0, 30.0).step(0.1).listen().onChange(function () { updateSceneObjects(); });
+    folderBodySetupError.add(ctrl_body_setup_error, "mode", enum_transf_mode).listen().onChange(function () { updateSceneObjects(); });   
+    folderBodySetupError.open();
 
-    var folderBodyTargetShift = gui.addFolder('Delta to Target Body Position [body coordinates]');
-    folderBodyTargetShift.add(ctrl_bodytarget_body_transf, "rotateX", -10.0, 10.0).step(0.1).listen().onChange(function () { updateSceneObjects(); });
-    folderBodyTargetShift.add(ctrl_bodytarget_body_transf, "rotateY", -10.0, 10.0).step(0.1).listen().onChange(function () { updateSceneObjects(); });
-    folderBodyTargetShift.add(ctrl_bodytarget_body_transf, "rotateZ", -180.0, 180.0).step(0.1).listen().onChange(function () { updateSceneObjects(); });
-    folderBodyTargetShift.add(ctrl_bodytarget_body_transf, "translateX", -30.0, 30.0).step(0.1).listen().onChange(function () { updateSceneObjects(); });
-    folderBodyTargetShift.add(ctrl_bodytarget_body_transf, "translateY", -30.0, 30.0).step(0.1).listen().onChange(function () { updateSceneObjects(); });
-    folderBodyTargetShift.add(ctrl_bodytarget_body_transf, "translateZ", -30.0, 30.0).step(0.1).listen().onChange(function () { updateSceneObjects(); });
-    folderBodyTargetShift.add(ctrl_bodytarget_body_transf, "mode", enum_body_target_transf_mode).listen().onChange(function () { updateSceneObjects(); });
-    folderBodyTargetShift.open();
+    var folderBodyPosCorrection = gui.addFolder('Body Position Correction');
+    folderBodyPosCorrection.add(ctrl_body_pos_correction_transf, "rotateX", -10.0, 10.0).step(0.1).listen().onChange(function () { updateSceneObjects(); });
+    folderBodyPosCorrection.add(ctrl_body_pos_correction_transf, "rotateY", -10.0, 10.0).step(0.1).listen().onChange(function () { updateSceneObjects(); });
+    folderBodyPosCorrection.add(ctrl_body_pos_correction_transf, "rotateZ", -180.0, 180.0).step(0.1).listen().onChange(function () { updateSceneObjects(); });
+    folderBodyPosCorrection.add(ctrl_body_pos_correction_transf, "translateX", -30.0, 30.0).step(0.1).listen().onChange(function () { updateSceneObjects(); });
+    folderBodyPosCorrection.add(ctrl_body_pos_correction_transf, "translateY", -30.0, 30.0).step(0.1).listen().onChange(function () { updateSceneObjects(); });
+    folderBodyPosCorrection.add(ctrl_body_pos_correction_transf, "translateZ", -30.0, 30.0).step(0.1).listen().onChange(function () { updateSceneObjects(); });
+    folderBodyPosCorrection.add(ctrl_body_pos_correction_transf, "mode", enum_transf_mode).listen().onChange(function () { updateSceneObjects(); });
+    folderBodyPosCorrection.open();
 
     var folderGui = gui.addFolder('Options');
     folderGui.add(ctrl_gui, "showHelperPlane").listen().onChange(function () { updateSceneObjects(); });
     folderGui.add(ctrl_gui, "showModel").listen().onChange(function () { updateSceneObjects(); });
     folderGui.open();
 
-    gui.open(); 
+    gui.open();
   };
 
   // create all axes lines
@@ -294,7 +298,7 @@ var rt_scene = (function () {
       var objLoader = new THREE.OBJLoader();
       objLoader.setPath('obj/legoman/');
       objLoader.load('LEGO_Man.obj', function (object) {
-        obj_model = object; // ref      
+        obj_model = object; // ref
         obj_model.scale.set(30, 30, 30);
         obj_model.position.set(0, -75, 0);
         var mat_model = new THREE.MeshLambertMaterial({ color: 0xB35A1E, shading: THREE.FlatShading, overdraw: 0.5 });
@@ -324,7 +328,7 @@ var rt_scene = (function () {
 
   var updateSceneObjects = function () {
 
-    {// top   
+    {// top   FIXME: different tx convention
       // M_{top-world}
       var m_top_transform = RTGEO.to_Euler_ZXY_Matrix4(
         RTGEO.degree_to_rad(ctrl_top_world_transf.rotateX),
@@ -367,9 +371,9 @@ var rt_scene = (function () {
       obj_body.material.visible = !ctrl_gui.showModel;
     }
 
-    {// body target position 
+    {// body target position
 
-      if (ctrl_bodytarget_body_transf.mode == enum_body_target_transf_mode.INTRINSIC_ORIGIN_zxy) {
+      if (ctrl_body_pos_correction_transf.mode == enum_transf_mode.INTRINSIC_ORIGIN_zxy) {
 
         /*the rotation part of the 4x4 matrix from the current body transformation M_{body-world} */
         var m_body_rotation = new THREE.Matrix4();
@@ -401,13 +405,13 @@ var rt_scene = (function () {
         // transformation for body target position
         // M_{bodytarget-world} =~ M_{ (body-world)+(bodytarget-body) }
         var m_bodytarget_transform = RTGEO.to_Euler_ZXY_Matrix4(
-          RTGEO.degree_to_rad(v_body_rotation_angles_deg.x + ctrl_bodytarget_body_transf.rotateX),
-          RTGEO.degree_to_rad(v_body_rotation_angles_deg.y + ctrl_bodytarget_body_transf.rotateY),
-          RTGEO.degree_to_rad(v_body_rotation_angles_deg.z + ctrl_bodytarget_body_transf.rotateZ));
+          RTGEO.degree_to_rad(v_body_rotation_angles_deg.x + ctrl_body_pos_correction_transf.rotateX),
+          RTGEO.degree_to_rad(v_body_rotation_angles_deg.y + ctrl_body_pos_correction_transf.rotateY),
+          RTGEO.degree_to_rad(v_body_rotation_angles_deg.z + ctrl_body_pos_correction_transf.rotateZ));
         var v_bodytarget_translate = new THREE.Vector4(
-          v_body_translate.x + ctrl_bodytarget_body_transf.translateX,
-          v_body_translate.y + ctrl_bodytarget_body_transf.translateY,
-          v_body_translate.z + ctrl_bodytarget_body_transf.translateZ);
+          v_body_translate.x + ctrl_body_pos_correction_transf.translateX,
+          v_body_translate.y + ctrl_body_pos_correction_transf.translateY,
+          v_body_translate.z + ctrl_body_pos_correction_transf.translateZ);
         v_bodytarget_translate = v_bodytarget_translate.applyMatrix4(m_bodytarget_transform);
         m_bodytarget_transform.elements[12] = v_bodytarget_translate.x;
         m_bodytarget_transform.elements[13] = v_bodytarget_translate.y;
@@ -417,7 +421,7 @@ var rt_scene = (function () {
         obj_body_target.matrixAutoUpdate = false;
         obj_body_target.material.visible = !ctrl_gui.showModel;
 
-        // visualize helper plane                        
+        // visualize helper plane
         var m_helperplane_transform = new THREE.Matrix4();
         m_helperplane_transform.copy(m_bodytarget_transform);
         m_helperplane_transform.elements[12] = 0; // ignore translation for better understaning
@@ -427,17 +431,17 @@ var rt_scene = (function () {
         obj_helper_plane.matrixAutoUpdate = false;
         obj_helper_plane.visible = ctrl_gui.showHelperPlane;
       }
-      else if (ctrl_bodytarget_body_transf.mode == enum_body_target_transf_mode.INTRINSIC_ORIGIN_Zxy) {
+      else if (ctrl_body_pos_correction_transf.mode == enum_transf_mode.INTRINSIC_ORIGIN_Zxy) {
 
         // M_{bodytarget-body}
         var m_bodytarget_body_transform = RTGEO.to_Euler_ZXY_Matrix4(
-          RTGEO.degree_to_rad(ctrl_bodytarget_body_transf.rotateX),
-          RTGEO.degree_to_rad(ctrl_bodytarget_body_transf.rotateY),
-          RTGEO.degree_to_rad(ctrl_bodytarget_body_transf.rotateZ));
+          RTGEO.degree_to_rad(ctrl_body_pos_correction_transf.rotateX),
+          RTGEO.degree_to_rad(ctrl_body_pos_correction_transf.rotateY),
+          RTGEO.degree_to_rad(ctrl_body_pos_correction_transf.rotateZ));
         var v_bodytarget_body_translate = new THREE.Vector4(
-          ctrl_bodytarget_body_transf.translateX,
-          ctrl_bodytarget_body_transf.translateY,
-          ctrl_bodytarget_body_transf.translateZ);
+          ctrl_body_pos_correction_transf.translateX,
+          ctrl_body_pos_correction_transf.translateY,
+          ctrl_body_pos_correction_transf.translateZ);
         v_bodytarget_body_translate = v_bodytarget_body_translate.applyMatrix4(m_bodytarget_body_transform);
         m_bodytarget_body_transform.elements[12] = v_bodytarget_body_translate.x;
         m_bodytarget_body_transform.elements[13] = v_bodytarget_body_translate.y;

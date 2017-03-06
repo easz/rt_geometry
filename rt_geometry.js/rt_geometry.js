@@ -8,6 +8,9 @@ var RTGEO = (function () {
     return rad * 180.0 / Math.PI;
   };
 
+  // right-handed convention
+
+  // Rz * Ry * Rx
   var to_Euler_XYZ_Matrix4 = function (rotX/*rad*/, rotY, rotZ) {
     var c1, c2, c3, s1, s2, s3;
     c1 = Math.cos(rotX); s1 = Math.sin(rotX) * -1.0;
@@ -21,6 +24,7 @@ var RTGEO = (function () {
     return m;
   };
 
+  // Rz * Ry * Rx
   var to_Euler_XYZ_Vector4 = function (m/*Matrix4*/) {
     var te = m.elements;
     var m11 = te[0], m12 = te[4], m13 = te[8];
@@ -40,6 +44,7 @@ var RTGEO = (function () {
     return new THREE.Vector4(_x, _y, _z);
   };
 
+  // Rx * Ry * Rz
   var to_Euler_ZYX_Matrix4 = function (rotX/*rad*/, rotY, rotZ) {
     var c1, c2, c3, s1, s2, s3;
     c1 = Math.cos(rotX); s1 = Math.sin(rotX) * -1.0;
@@ -53,6 +58,7 @@ var RTGEO = (function () {
     return m;
   }
 
+  // Rx * Ry * Rz
   var to_Euler_ZYX_Vector4 = function (m/*Matrix4*/) {
     var te = m.elements;
     var m11 = te[0], m12 = te[4], m13 = te[8];
@@ -72,6 +78,7 @@ var RTGEO = (function () {
     return new THREE.Vector4(_x, _y, _z);
   }
 
+  // Rz * Rx * Ry
   var to_Euler_YXZ_Matrix4 = function (rotX/*rad*/, rotY, rotZ) {
     var c1, c2, c3, s1, s2, s3;
     c1 = Math.cos(rotX); s1 = Math.sin(rotX) * -1.0;
@@ -85,6 +92,7 @@ var RTGEO = (function () {
     return m;
   }
 
+  // Rz * Rx * Ry
   var to_Euler_YXZ_Vector4 = function (m/*Matrix4*/) {
     var te = m.elements;
     var m11 = te[0], m12 = te[4], m13 = te[8];
@@ -104,6 +112,7 @@ var RTGEO = (function () {
     return new THREE.Vector4(_x, _y, _z);
   }
 
+  // Ry * Rx * Rz
   var to_Euler_ZXY_Matrix4 = function (rotX/*rad*/, rotY, rotZ) {
     var c1, c2, c3, s1, s2, s3;
     c1 = Math.cos(rotX); s1 = Math.sin(rotX) * -1.0;
@@ -117,6 +126,7 @@ var RTGEO = (function () {
     return m;
   }
 
+  // Ry * Rx * Rz
   var to_Euler_ZXY_Vector4 = function (m/*Matrix4*/) {
     var te = m.elements;
     var m11 = te[0], m12 = te[4], m13 = te[8];
