@@ -25,7 +25,7 @@ var RTGEO = (function () {
   };
 
   // Rz * Ry * Rx
-  var create_Euler_XYZ_Vector4 = function (m/*Matrix4*/) {
+  var to_Euler_XYZ_Vector4 = function (m/*Matrix4*/) {
     var te = m.elements;
     var m11 = te[0], m12 = te[4], m13 = te[8];
     var m21 = te[1], m22 = te[5], m23 = te[9];
@@ -59,7 +59,7 @@ var RTGEO = (function () {
   }
 
   // Rx * Ry * Rz
-  var create_Euler_ZYX_Vector4 = function (m/*Matrix4*/) {
+  var to_Euler_ZYX_Vector4 = function (m/*Matrix4*/) {
     var te = m.elements;
     var m11 = te[0], m12 = te[4], m13 = te[8];
     var m21 = te[1], m22 = te[5], m23 = te[9];
@@ -93,7 +93,7 @@ var RTGEO = (function () {
   }
 
   // Rz * Rx * Ry
-  var create_Euler_YXZ_Vector4 = function (m/*Matrix4*/) {
+  var to_Euler_YXZ_Vector4 = function (m/*Matrix4*/) {
     var te = m.elements;
     var m11 = te[0], m12 = te[4], m13 = te[8];
     var m21 = te[1], m22 = te[5], m23 = te[9];
@@ -127,7 +127,7 @@ var RTGEO = (function () {
   }
 
   // Ry * Rx * Rz
-  var create_Euler_ZXY_Vector4 = function (m/*Matrix4*/) {
+  var to_Euler_ZXY_Vector4 = function (m/*Matrix4*/) {
     var te = m.elements;
     var m11 = te[0], m12 = te[4], m13 = te[8];
     var m21 = te[1], m22 = te[5], m23 = te[9];
@@ -146,6 +146,22 @@ var RTGEO = (function () {
     return new THREE.Vector4(_x, _y, _z);
   }
 
+  var extract_intrinsic_R_T = function (m/*Matrix4*/) {
+    //  return: [R, T] from m
+    //                      
+    //  where m := | R RT |
+    //             | 0 1  |
+    var R = new THREE.Matrix4();
+    R.extractRotation(m);
+    var R_inv = new THREE.Matrix4();
+    R_inv = R_inv.getInverse(R);
+    var RT = new THREE.Vector4(m.elements[12], m.elements[13], m.elements[14]);
+    var T = RT.clone();
+    T = T.applyMatrix4(R_inv);
+    return [R, T];
+  };
+
+  /// create a @c THREE.Matrix4 to represent an intrinsic transformation with z-x-y order
   var create_intrinsic_zxy_Matrix4 = function (rotateX/*rad*/, rotateY, rotateZ, translateX, translateY, translateZ) {
     //  return: | R' R'T' |
     //          | 0    1  |
@@ -161,10 +177,12 @@ var RTGEO = (function () {
     return R1;
   };
 
-  var create_isocentric_Zxy_Matrix4 = function (rotateX/*rad*/, rotateY, rotateZ, translateX, translateY, translateZ) {
+  /// create a @c THREE.Matrix4 to represent an isocentric transformation with Z-X-Y order where Z is the fixed axis on the origin
+  var create_isocentric_ZXY_Matrix4 = function (rotateX/*rad*/, rotateY, rotateZ, translateX, translateY, translateZ) {
     return create_intrinsic_zxy_Matrix4(rotateX, rotateY, rotateZ, translateX, translateY, translateZ);
   };
 
+  /// create a @c THREE.Matrix4 to represent an intrinsic transfomration (rotation with z-x-y order) following a given @a transfomed transformation
   var create_transformed_intrinsic_zxy_Matrix4 = function (transfomed/*THREE.Matrix4*/, rotateX/*rad*/, rotateY, rotateZ, translateX, translateY, translateZ) {
     //  return: | R'R''   R'T' + R'R''T'' |
     //          | 0                 1     |
@@ -197,17 +215,20 @@ var RTGEO = (function () {
     rad_to_degree: rad_to_degree,
 
     create_Euler_XYZ_Matrix4: create_Euler_ZXY_Matrix4,
-    create_Euler_XYZ_Vector4: create_Euler_ZXY_Vector4,
+    to_Euler_XYZ_Vector4: to_Euler_ZXY_Vector4,
     create_Euler_ZYX_Matrix4: create_Euler_ZXY_Matrix4,
-    create_Euler_ZYX_Vector4: create_Euler_ZXY_Vector4,
+    to_Euler_ZYX_Vector4: to_Euler_ZXY_Vector4,
 
     create_Euler_YXZ_Matrix4: create_Euler_ZXY_Matrix4,
-    create_Euler_YXZ_Vector4: create_Euler_ZXY_Vector4,
+    to_Euler_YXZ_Vector4: to_Euler_ZXY_Vector4,
     create_Euler_ZXY_Matrix4: create_Euler_ZXY_Matrix4,
-    create_Euler_ZXY_Vector4: create_Euler_ZXY_Vector4,
+    to_Euler_ZXY_Vector4: to_Euler_ZXY_Vector4,
+
+    extract_intrinsic_R_T: extract_intrinsic_R_T,
 
     create_intrinsic_zxy_Matrix4: create_intrinsic_zxy_Matrix4,
-    create_isocentric_Zxy_Matrix4: create_isocentric_Zxy_Matrix4,
+    create_isocentric_ZXY_Matrix4: create_isocentric_ZXY_Matrix4,
+
     create_transformed_intrinsic_zxy_Matrix4: create_transformed_intrinsic_zxy_Matrix4
   }
 })();
