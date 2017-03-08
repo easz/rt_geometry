@@ -105,25 +105,30 @@ var rt_scene = (function () {
     showModel: true
   };
 
+  var ctri_debug = {// debug control or dev purpose
+    debug_verify_correction_enable: false,        // to verify couch top transformation according to body position correction
+    debug_verify_matrics_equal_tolerance: 0.00001 // tolerance to compare matrix elements
+  };
+
   /* ************************* */
   /* ***** FUNCTIONS      **** */
   /* ************************* */
 
   var initControls = function () {
-    var gui = new dat.GUI();
+    const gui = new dat.GUI();
     gui.width = 350;
 
-    var folderCouchTop = gui.addFolder('Initial Couch Top Position');
-    folderCouchTop.add(ctrl_top_world_transf, "rotateX", -90.0, 90.0).step(0.1).listen().onChange(function () { updateSceneObjectsPosition(); });
-    folderCouchTop.add(ctrl_top_world_transf, "rotateY", -90.0, 90.0).step(0.1).listen().onChange(function () { updateSceneObjectsPosition(); });
+    const folderCouchTop = gui.addFolder('Initial Couch Top Position');
+    folderCouchTop.add(ctrl_top_world_transf, "rotateX", -10.0, 10.0).step(0.1).listen().onChange(function () { updateSceneObjectsPosition(); });
+    folderCouchTop.add(ctrl_top_world_transf, "rotateY", -10.0, 10.0).step(0.1).listen().onChange(function () { updateSceneObjectsPosition(); });
     folderCouchTop.add(ctrl_top_world_transf, "rotateZ", -100.0, 100.0).step(0.1).listen().onChange(function () { updateSceneObjectsPosition(); });
     folderCouchTop.add(ctrl_top_world_transf, "translateX", -50.0, 50.0).step(0.1).listen().onChange(function () { updateSceneObjectsPosition(); });
-    folderCouchTop.add(ctrl_top_world_transf, "translateY", -120.0, -40.0).step(0.1).listen().onChange(function () { updateSceneObjectsPosition(); });
+    folderCouchTop.add(ctrl_top_world_transf, "translateY", -140.0, -20.0).step(0.1).listen().onChange(function () { updateSceneObjectsPosition(); });
     folderCouchTop.add(ctrl_top_world_transf, "translateZ", -60.0, 10.0).step(0.1).listen().onChange(function () { updateSceneObjectsPosition(); });
     folderCouchTop.add(ctrl_top_world_transf, "mode", enum_couch_transf_mode).listen().onChange(function () { updateSceneObjectsPosition(); });
     folderCouchTop.open();
 
-    var folderBodyToCouchTop = gui.addFolder('Initial Body Position [relative to Couch Top]');
+    const folderBodyToCouchTop = gui.addFolder('Initial Body Position [relative to Couch Top]');
     folderBodyToCouchTop.add(ctrl_body_top_transf, "rotateX", -10.0, 10.0).step(0.1).listen().onChange(function () { updateSceneObjectsPosition(); });
     folderBodyToCouchTop.add(ctrl_body_top_transf, "rotateY", -10.0, 10.0).step(0.1).listen().onChange(function () { updateSceneObjectsPosition(); });
     folderBodyToCouchTop.add(ctrl_body_top_transf, "rotateZ", -15.0, 15.0).step(0.1).listen().onChange(function () { updateSceneObjectsPosition(); });
@@ -133,17 +138,17 @@ var rt_scene = (function () {
     folderBodyToCouchTop.add(ctrl_body_top_transf, "mode", enum_body_top_transf_mode).listen().onChange(function () { updateSceneObjectsPosition(); });
     folderBodyToCouchTop.close();
 
-    var folderBodyPosCorrection = gui.addFolder('Body Position Correction');
+    const folderBodyPosCorrection = gui.addFolder('Body Position Correction');
     folderBodyPosCorrection.add(ctrl_body_correction_transf, "rotateX", -90.0, 90.0).step(0.1).listen().onChange(function () { updateSceneObjectsPosition(); });
     folderBodyPosCorrection.add(ctrl_body_correction_transf, "rotateY", -90.0, 90.0).step(0.1).listen().onChange(function () { updateSceneObjectsPosition(); });
     folderBodyPosCorrection.add(ctrl_body_correction_transf, "rotateZ", -90.0, 90.0).step(0.1).listen().onChange(function () { updateSceneObjectsPosition(); });
     folderBodyPosCorrection.add(ctrl_body_correction_transf, "translateX", -50.0, 50.0).step(0.1).listen().onChange(function () { updateSceneObjectsPosition(); });
     folderBodyPosCorrection.add(ctrl_body_correction_transf, "translateY", -50.0, 50.0).step(0.1).listen().onChange(function () { updateSceneObjectsPosition(); });
-    folderBodyPosCorrection.add(ctrl_body_correction_transf, "translateZ", -40.0, 30.0).step(0.1).listen().onChange(function () { updateSceneObjectsPosition(); });
+    folderBodyPosCorrection.add(ctrl_body_correction_transf, "translateZ", -50.0, 50.0).step(0.1).listen().onChange(function () { updateSceneObjectsPosition(); });
     folderBodyPosCorrection.add(ctrl_body_correction_transf, "mode", enum_body_correction_transf_mode).listen().onChange(function () { updateSceneObjectsPosition(); });
     folderBodyPosCorrection.open();
 
-    var folderGui = gui.addFolder('Options');
+    const folderGui = gui.addFolder('Options');
     folderGui.add(ctrl_gui, "sourceOpacity", 0.0, 1.0).step(0.05).listen().onChange(function () { updateSceneObjectsMaterial(); });
     folderGui.add(ctrl_gui, "targetOpacity", 0.0, 1.0).step(0.05).listen().onChange(function () { updateSceneObjectsMaterial(); });
     folderGui.add(ctrl_gui, "showHelperPlane").listen().onChange(function () { updateSceneObjectsPosition(); });
@@ -158,13 +163,13 @@ var rt_scene = (function () {
 
     // create single axis line
     var buildAxis = function (src, dst, colorHex, dashed) {
-      var geom = new THREE.Geometry(),
-        mat;
+      var mat;
       if (dashed) {
         mat = new THREE.LineDashedMaterial({ linewidth: 3, color: colorHex, dashSize: 3, gapSize: 3 });
       } else {
         mat = new THREE.LineBasicMaterial({ linewidth: 3, color: colorHex });
       }
+      const geom = new THREE.Geometry();
       geom.vertices.push(src.clone());
       geom.vertices.push(dst.clone());
       geom.computeLineDistances();
@@ -173,7 +178,7 @@ var rt_scene = (function () {
     };
     //
 
-    var axes = new THREE.Object3D();
+    const axes = new THREE.Object3D();
     axes.add(buildAxis(new THREE.Vector3(0, 0, 0), new THREE.Vector3(length, 0, 0), 0xFF0000, false)); // +X
     axes.add(buildAxis(new THREE.Vector3(0, 0, 0), new THREE.Vector3(-length, 0, 0), 0xFF0000, true)); // -X
     axes.add(buildAxis(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, length, 0), 0x228b22, false)); // +Y
@@ -187,20 +192,20 @@ var rt_scene = (function () {
 
     // create text
     var buildText = function (text, font, color, position) {
-      var textGeometry = new THREE.TextGeometry(text, {
+      const textGeometry = new THREE.TextGeometry(text, {
         size: 15,
         height: 3,
         font: font
       });
       textGeometry.computeBoundingBox();
-      var textMaterial = new THREE.MeshBasicMaterial({ color: color, overdraw: 0.5 });
-      var textMesh = new THREE.Mesh(textGeometry, textMaterial);
+      const textMaterial = new THREE.MeshBasicMaterial({ color: color, overdraw: 0.5 });
+      const textMesh = new THREE.Mesh(textGeometry, textMaterial);
       textMesh.position.set(position.x, position.y, position.z);
       return textMesh;
     };
     //
 
-    var loader = new THREE.FontLoader();
+    const loader = new THREE.FontLoader();
     loader.load('./three.js/examples/fonts/helvetiker_regular.typeface.json', function (font) {
       scene.add(buildText("X", font, 0xff0000,
         new THREE.Vector3(300, 5, 5)));
@@ -213,8 +218,8 @@ var rt_scene = (function () {
 
   var addSceneObjects = function () {
     {
-      var geometry = new THREE.BoxGeometry(85, 110, 120);
-      var material = new THREE.MeshLambertMaterial({ color: 0xAA5585, shading: THREE.FlatShading, overdraw: 0.5 });
+      const geometry = new THREE.BoxGeometry(85, 110, 120);
+      const material = new THREE.MeshLambertMaterial({ color: 0xAA5585, shading: THREE.FlatShading, overdraw: 0.5 });
       obj_base = new THREE.Mesh(geometry, material);
       obj_base_target = new THREE.Mesh(geometry.clone(), material.clone());
       scene.add(obj_base);
@@ -222,8 +227,8 @@ var rt_scene = (function () {
     }
 
     {
-      var geometry = new THREE.BoxGeometry(90, 120, 70);
-      var material = new THREE.MeshLambertMaterial({ color: 0xD46A6A, shading: THREE.FlatShading, overdraw: 0.5 });
+      const geometry = new THREE.BoxGeometry(90, 120, 70);
+      const material = new THREE.MeshLambertMaterial({ color: 0xD46A6A, shading: THREE.FlatShading, overdraw: 0.5 });
       obj_couch = new THREE.Mesh(geometry, material);
       obj_couch_target = new THREE.Mesh(geometry.clone(), material.clone());
       scene.add(obj_couch);
@@ -231,8 +236,8 @@ var rt_scene = (function () {
     }
 
     {
-      var geometry = new THREE.BoxGeometry(80, 110, 25);
-      var material = new THREE.MeshLambertMaterial({ color: 0xD49A6A, shading: THREE.FlatShading, overdraw: 0.5 });
+      const geometry = new THREE.BoxGeometry(80, 110, 25);
+      const material = new THREE.MeshLambertMaterial({ color: 0xD49A6A, shading: THREE.FlatShading, overdraw: 0.5 });
       obj_robotic = new THREE.Mesh(geometry, material);
       obj_robotic_target = new THREE.Mesh(geometry.clone(), material.clone());
       scene.add(obj_robotic);
@@ -240,8 +245,8 @@ var rt_scene = (function () {
     }
 
     {
-      var geometry = new THREE.BoxGeometry(100, 220, 1);
-      var material = new THREE.MeshLambertMaterial({ color: 0xcbcbcb, shading: THREE.FlatShading, overdraw: 0.5 });
+      const geometry = new THREE.BoxGeometry(100, 220, 1);
+      const material = new THREE.MeshLambertMaterial({ color: 0xcbcbcb, shading: THREE.FlatShading, overdraw: 0.5 });
       obj_top = new THREE.Mesh(geometry, material);
       obj_top_target = new THREE.Mesh(geometry.clone(), material.clone());
       scene.add(obj_top);
@@ -249,8 +254,8 @@ var rt_scene = (function () {
     }
 
     {
-      var geometry = new THREE.BoxGeometry(70, 180, 20);
-      var material = new THREE.MeshLambertMaterial({ color: 0xFFB218, shading: THREE.FlatShading, overdraw: 0.5 });
+      const geometry = new THREE.BoxGeometry(70, 180, 20);
+      const material = new THREE.MeshLambertMaterial({ color: 0xFFB218, shading: THREE.FlatShading, overdraw: 0.5 });
       obj_body = new THREE.Mesh(geometry, material);
       obj_body_target = new THREE.Mesh(geometry.clone(), material.clone());
       scene.add(obj_body);
@@ -258,20 +263,20 @@ var rt_scene = (function () {
     }
 
     {
-      var geometry = new THREE.BoxGeometry(200, 400, 1);
-      var material = new THREE.MeshLambertMaterial({ color: 0xF4FC03, shading: THREE.FlatShading, overdraw: 0.5 });
+      const geometry = new THREE.BoxGeometry(200, 400, 1);
+      const material = new THREE.MeshLambertMaterial({ color: 0xF4FC03, shading: THREE.FlatShading, overdraw: 0.5 });
       obj_helper_plane = new THREE.Mesh(geometry, material);
       scene.add(obj_helper_plane);
     }
 
     // load obj model and add it to geometry objects
     {
-      var objLoader = new THREE.OBJLoader();
+      const objLoader = new THREE.OBJLoader();
       objLoader.setPath('obj/legoman/');
       objLoader.load('LEGO_Man.obj', function (object) {
         obj_model = object; // ref
         obj_model.scale.set(30, 30, 30);
-        var mat_model = new THREE.MeshLambertMaterial({ color: 0xB35A1E, shading: THREE.FlatShading, overdraw: 0.5 });
+        const mat_model = new THREE.MeshLambertMaterial({ color: 0xB35A1E, shading: THREE.FlatShading, overdraw: 0.5 });
         mat_model.transparent = true;
         mat_model.opacity = ctrl_gui.sourceOpacity;
         obj_model.traverse(function (child) {
@@ -282,7 +287,7 @@ var rt_scene = (function () {
         obj_body.add(obj_model); // added
 
         obj_model_target = obj_model.clone(); // clone
-        var mat_model_target = new THREE.MeshLambertMaterial({ color: 0xB35A1E, shading: THREE.FlatShading, overdraw: 0.5 });
+        const mat_model_target = new THREE.MeshLambertMaterial({ color: 0xB35A1E, shading: THREE.FlatShading, overdraw: 0.5 });
         mat_model_target.transparent = true;
         mat_model_target.opacity = ctrl_gui.targetOpacity;
         obj_model_target.traverse(function (child) {
@@ -374,8 +379,8 @@ var rt_scene = (function () {
           ctrl_body_top_transf.translateY,
           ctrl_body_top_transf.translateZ);
         // M_{body-world} = M_{top-world} * M_{body-top}
-        var m_body_transform = new THREE.Matrix4();
-        var m_body_transform = m_body_transform.multiplyMatrices(obj_top.matrix, m_body_top_transform);
+        const m_body_transform = new THREE.Matrix4();
+        m_body_transform.multiplyMatrices(obj_top.matrix, m_body_top_transform);
         // assign matrix
         obj_body.matrix = m_body_transform;
         obj_body.matrixAutoUpdate = false;
@@ -397,46 +402,48 @@ var rt_scene = (function () {
           ctrl_body_correction_transf.translateY,
           ctrl_body_correction_transf.translateZ);
         // M_{bodytarget-wolrd} = M_{bodytarget-body} * M_{body-wolrd}
-        var m_bodytarget_transform = new THREE.Matrix4();
-        m_bodytarget_transform = m_bodytarget_transform.multiplyMatrices(m_bodytarget_body_transform, obj_body.matrix);
+        const m_bodytarget_transform = new THREE.Matrix4();
+        m_bodytarget_transform.multiplyMatrices(m_bodytarget_body_transform, obj_body.matrix);
         // assign matrix
         obj_body_target.matrix = m_bodytarget_transform;
         obj_body_target.matrixAutoUpdate = false;
         obj_body_target.material.visible = !ctrl_gui.showModel;
-        // visualize helper plane
-        var m_helperplane_transform = new THREE.Matrix4();
-        m_helperplane_transform = m_helperplane_transform.extractRotation(m_bodytarget_body_transform);
+        // visualize helper plane: rotation part of M_{bodytarget-body}_R
+        const m_helperplane_transform = new THREE.Matrix4();
+        m_helperplane_transform.extractRotation(m_bodytarget_body_transform);
         obj_helper_plane.matrix = m_helperplane_transform;
         obj_helper_plane.matrixAutoUpdate = false;
         obj_helper_plane.visible = ctrl_gui.showHelperPlane;
       }
       else if (ctrl_body_correction_transf.mode == enum_transf_mode.ISOCENTRIC_zXY) {
         // M_{bodytarget-body}
-        var m_bodytarget_body_transform = RTGEO.create_isocentric_ZXY_Matrix4(
+        const m_bodytarget_body_transform = RTGEO.create_isocentric_ZXY_Matrix4(
           RTGEO.degree_to_rad(ctrl_body_correction_transf.rotateX),
           RTGEO.degree_to_rad(ctrl_body_correction_transf.rotateY),
           RTGEO.degree_to_rad(ctrl_body_correction_transf.rotateZ),
           ctrl_body_correction_transf.translateX,
           ctrl_body_correction_transf.translateY,
           ctrl_body_correction_transf.translateZ);
-        // M_{body-world}_z: transformation matrix for undo/redo z rotation of M_{body-world}
+        // M_{body-world}_Rz: transformation matrix of Z rotation of M_{body-world}
         const v_body_rotation_angles/*rad*/ = RTGEO.to_Euler_ZXY_Vector4(obj_body.matrix);
         const m_undo_body_rotation_z = RTGEO.create_Euler_ZXY_Matrix4(0, 0, -v_body_rotation_angles.z);
         const m_redo_body_rotation_z = RTGEO.create_Euler_ZXY_Matrix4(0, 0, v_body_rotation_angles.z);
         // transformation for body target position
-        // M_{bodytarget-world} = M_redo_z * M_{bodytarget-body} * M_undo_z * M_{body-world}
-        var m_bodytarget_transform = new THREE.Matrix4();
-        m_bodytarget_transform = m_bodytarget_transform.multiplyMatrices(m_undo_body_rotation_z, obj_body.matrix);
-        m_bodytarget_transform = m_bodytarget_transform.multiplyMatrices(m_bodytarget_body_transform, m_bodytarget_transform);
-        m_bodytarget_transform = m_bodytarget_transform.multiplyMatrices(m_redo_body_rotation_z, m_bodytarget_transform);
+        // M_{bodytarget-world} = M_redo_Rz * M_{bodytarget-body} * M_undo_Rz * M_{body-world}
+        // where  M_undo_Rz := M_{body-world}_Rz^-1
+        //        M_redo_Rz := M_{body-world}_Rz
+        const m_bodytarget_transform = new THREE.Matrix4();
+        m_bodytarget_transform.multiplyMatrices(m_undo_body_rotation_z, obj_body.matrix);
+        m_bodytarget_transform.multiplyMatrices(m_bodytarget_body_transform, m_bodytarget_transform);
+        m_bodytarget_transform.multiplyMatrices(m_redo_body_rotation_z, m_bodytarget_transform);
         // assign matrix
         obj_body_target.matrix = m_bodytarget_transform;
         obj_body_target.matrixAutoUpdate = false;
         obj_body_target.material.visible = !ctrl_gui.showModel;
-        // visualize helper plane
-        var m_helperplane_transform = new THREE.Matrix4();
-        m_helperplane_transform = m_helperplane_transform.multiplyMatrices(m_redo_body_rotation_z, m_bodytarget_body_transform);
-        m_helperplane_transform = m_helperplane_transform.extractRotation(m_helperplane_transform.clone());
+        // visualize helper plane: rotation part of M_{body-world}_Rz * M_{bodytarget-body}
+        const m_helperplane_transform = new THREE.Matrix4();
+        m_helperplane_transform.multiplyMatrices(m_redo_body_rotation_z, m_bodytarget_body_transform);
+        m_helperplane_transform.extractRotation(m_helperplane_transform.clone());
         obj_helper_plane.matrix = m_helperplane_transform;
         obj_helper_plane.matrixAutoUpdate = false;
         obj_helper_plane.visible = ctrl_gui.showHelperPlane;
@@ -446,15 +453,15 @@ var rt_scene = (function () {
       }
     }
 
-    {// 3D MODEL (model, model_taget inside body and body_target)
+    {// 3D MODEL (visibility of model/model_taget inside body/body_target)
       obj_model.visible = ctrl_gui.showModel;
       obj_model_target.visible = ctrl_gui.showModel;
     }
 
     {// TOP_TARGET (determine couch top target position relative to known body target position)
       if (ctrl_body_top_transf.mode == enum_transf_mode.ISOCENTRIC_ZXY) {
-        // M_{bodytarget-toptarget}
-        const m_body_top_transform = RTGEO.create_isocentric_ZXY_Matrix4(
+        // M_{bodytarget-toptarget} =~ M_{body-top}
+        const m_bodytarget_toptarget_transform = RTGEO.create_isocentric_ZXY_Matrix4(
           RTGEO.degree_to_rad(ctrl_body_top_transf.rotateX),
           RTGEO.degree_to_rad(ctrl_body_top_transf.rotateY),
           RTGEO.degree_to_rad(ctrl_body_top_transf.rotateZ),
@@ -462,11 +469,12 @@ var rt_scene = (function () {
           ctrl_body_top_transf.translateY,
           ctrl_body_top_transf.translateZ);
         // M_{bodytarget-toptarget}^-1
-        var m_inverse_body_top_transform = new THREE.Matrix4();
-        m_inverse_body_top_transform = m_inverse_body_top_transform.getInverse(m_body_top_transform);
+        const m_inverse_bodytarget_toptarget_transform = new THREE.Matrix4();
+        m_inverse_bodytarget_toptarget_transform.getInverse(m_bodytarget_toptarget_transform);
         // M_{toptarget-world} = M_{bodytarget-world} * M_{bodytarget-toptarget}^-1
-        var m_toptarget_transform = new THREE.Matrix4();
-        m_toptarget_transform = m_toptarget_transform.multiplyMatrices(obj_body_target.matrix, m_inverse_body_top_transform);
+        const m_toptarget_transform = new THREE.Matrix4();
+        m_toptarget_transform.multiplyMatrices(obj_body_target.matrix, m_inverse_bodytarget_toptarget_transform);
+        // assign matrix
         obj_top_target.matrix = m_toptarget_transform;
         obj_top_target.matrixAutoUpdate = false;
       }
@@ -479,7 +487,7 @@ var rt_scene = (function () {
 
     {// ROBOTIC (attached to TOP)
       // M_{top-robotic}
-      var m_top_robotic_transform = RTGEO.create_isocentric_ZXY_Matrix4/*default*/(
+      const m_top_robotic_transform = RTGEO.create_isocentric_ZXY_Matrix4/*default*/(
         RTGEO.degree_to_rad(config_top_robotic_transf.rotateX),
         RTGEO.degree_to_rad(config_top_robotic_transf.rotateY),
         RTGEO.degree_to_rad(config_top_robotic_transf.rotateZ),
@@ -487,17 +495,18 @@ var rt_scene = (function () {
         config_top_robotic_transf.translateY,
         config_top_robotic_transf.translateZ);
       // M_{top-robotic}^-1
-      var m_inverse_top_robotic_transform = new THREE.Matrix4();
-      m_inverse_top_robotic_transform = m_inverse_top_robotic_transform.getInverse(m_top_robotic_transform);
+      const m_inverse_top_robotic_transform = new THREE.Matrix4();
+      m_inverse_top_robotic_transform.getInverse(m_top_robotic_transform);
       // M_{robotic-world} = M_{top-world} * M_{top-robotic}^-1
-      var m_robotic_transform = new THREE.Matrix4();
-      m_robotic_transform = m_robotic_transform.multiplyMatrices(obj_top.matrix, m_inverse_top_robotic_transform);
+      const m_robotic_transform = new THREE.Matrix4();
+      m_robotic_transform.multiplyMatrices(obj_top.matrix, m_inverse_top_robotic_transform);
+      // assign matrix
       obj_robotic.matrix = m_robotic_transform;
       obj_robotic.matrixAutoUpdate = false;
     }
     {// ROBOTIC_TARGET (attached to TOP_TARGET)
-      // M_{toptarget-robotictarget}
-      var m_toptarget_robotictarget_transform = RTGEO.create_isocentric_ZXY_Matrix4/*default*/(
+      // M_{toptarget-robotictarget} =~ M_{top-robotic}
+      const m_toptarget_robotictarget_transform = RTGEO.create_isocentric_ZXY_Matrix4/*default*/(
         RTGEO.degree_to_rad(config_top_robotic_transf.rotateX),
         RTGEO.degree_to_rad(config_top_robotic_transf.rotateY),
         RTGEO.degree_to_rad(config_top_robotic_transf.rotateZ),
@@ -505,141 +514,132 @@ var rt_scene = (function () {
         config_top_robotic_transf.translateY,
         config_top_robotic_transf.translateZ);
       // M_{toptarget-robotictarget}^-1
-      var m_inverse_toptarget_robotictarget_transform = new THREE.Matrix4();
-      m_inverse_toptarget_robotictarget_transform = m_inverse_toptarget_robotictarget_transform.getInverse(m_toptarget_robotictarget_transform);
+      const m_inverse_toptarget_robotictarget_transform = new THREE.Matrix4();
+      m_inverse_toptarget_robotictarget_transform.getInverse(m_toptarget_robotictarget_transform);
       // M_{robotictarget-world} = M_{toptarget-world} * M_{toptarget-robotictarget}^-1
-      var m_robotictarget_transform = new THREE.Matrix4();
-      m_robotictarget_transform = m_robotictarget_transform.multiplyMatrices(obj_top_target.matrix, m_inverse_toptarget_robotictarget_transform);
+      const m_robotictarget_transform = new THREE.Matrix4();
+      m_robotictarget_transform.multiplyMatrices(obj_top_target.matrix, m_inverse_toptarget_robotictarget_transform);
+      // assign matrix
       obj_robotic_target.matrix = m_robotictarget_transform;
       obj_robotic_target.matrixAutoUpdate = false;
     }
 
     {// COUCH
-      /*the rotation part of the 4x4 matrix from the current robotic transformation M_{robotic-world} */
-      var m_robotic_rotation = new THREE.Matrix4();
-      m_robotic_rotation.copy(obj_robotic.matrix);
-      m_robotic_rotation.elements[12] = 0;
-      m_robotic_rotation.elements[13] = 0;
-      m_robotic_rotation.elements[14] = 0;
-      /*the translation part of the 4x4 matrix from the current robotic transformation M_{robotic-world} */
-      var v_robotic_rotated_translate = new THREE.Vector4(
-        obj_robotic.matrix.elements[12],
-        obj_robotic.matrix.elements[13],
-        obj_robotic.matrix.elements[14]);
-      /*the !intrinsic! translation of the current transformation*/
-      var m_inverse_robotic_rotation = new THREE.Matrix4();
-      m_inverse_robotic_rotation = m_inverse_robotic_rotation.getInverse(m_robotic_rotation); // trasnpose!?
-      var v_robotic_translate = new THREE.Vector4();
-      v_robotic_translate.copy(v_robotic_rotated_translate);
-      v_robotic_translate = v_robotic_translate.applyMatrix4(m_inverse_robotic_rotation);
-      /*the !intrinsic! rotation angles of the current transformation*/
-      var v_robotic_rotation_angles/*rad*/ = RTGEO.to_Euler_ZXY_Vector4(m_robotic_rotation);
-
-      /* calculate transformation of the current robotic but only z rotated:
-         M_{roboticZ-world} */
-      var m_roboticZ_transform = RTGEO.create_Euler_ZXY_Matrix4(0, 0, v_robotic_rotation_angles.z);
-      v_robotic_translate = v_robotic_translate.applyMatrix4(m_roboticZ_transform);
-      m_roboticZ_transform.elements[12] = v_robotic_translate.x;
-      m_roboticZ_transform.elements[13] = v_robotic_translate.y;
-      m_roboticZ_transform.elements[14] = v_robotic_translate.z;
-
-      // M_{roboticZ-couch}
-      var m_roboticZ_couch_transform = RTGEO.create_isocentric_ZXY_Matrix4/*default*/(
+      // [M_{robotic-world}_R, V_{robotic-world}_T]: intrisic rotation and translation from M_{robotic-world} 
+      var [m_robotic_transform_R, v_robotic_translate] = RTGEO.extract_intrinsic_R_T(obj_robotic.matrix);
+      // M_{robotic-world}_Rz_RzT: keep only rotaion Z effect
+      const m_robotic_transform_Rz_RzT = RTGEO.create_isocentric_ZXY_Matrix4/*default*/(
+        0, 0, RTGEO.to_Euler_ZXY_Vector4(m_robotic_transform_R).z/*rad*/,
+        v_robotic_translate.x, v_robotic_translate.y, v_robotic_translate.z
+      );
+      // M_{robotic-couch}
+      const m_robotic_couch_transform = RTGEO.create_isocentric_ZXY_Matrix4/*default*/(
         RTGEO.degree_to_rad(config_robotic_couch_transf.rotateX),
         RTGEO.degree_to_rad(config_robotic_couch_transf.rotateY),
         RTGEO.degree_to_rad(config_robotic_couch_transf.rotateZ),
         config_robotic_couch_transf.translateX,
         config_robotic_couch_transf.translateY,
         config_robotic_couch_transf.translateZ);
-      // M_{roboticZ-couch}^-1
-      var m_inverse_roboticZ_couch_transform = new THREE.Matrix4();
-      m_inverse_roboticZ_couch_transform = m_inverse_roboticZ_couch_transform.getInverse(m_roboticZ_couch_transform);
-      // M_{couch-world} = M_{roboticZ-world} * M_{roboticZ-couch}^-1
-      var m_couch_transform = new THREE.Matrix4();
-      m_couch_transform = m_couch_transform.multiplyMatrices(m_roboticZ_transform, m_inverse_roboticZ_couch_transform);
+      // M_{robotic-couch}^-1
+      const m_inverse_robotic_couch_transform = new THREE.Matrix4();
+      m_inverse_robotic_couch_transform.getInverse(m_robotic_couch_transform);
+      // M_{couch-world} = M_{robotic-world}_Rz_RzT * M_{robotic-couch}^-1
+      const m_couch_transform = new THREE.Matrix4();
+      m_couch_transform.multiplyMatrices(m_robotic_transform_Rz_RzT, m_inverse_robotic_couch_transform);
       obj_couch.matrix = m_couch_transform;
       obj_couch.matrixAutoUpdate = false;
     }
     {// COUCH_TARGET
-      /*the rotation part of the 4x4 matrix from the target robotic transformation M_{robotictarget-world} */
-      var m_robotictarget_rotation = new THREE.Matrix4();
-      m_robotictarget_rotation.copy(obj_robotic_target.matrix);
-      m_robotictarget_rotation.elements[12] = 0;
-      m_robotictarget_rotation.elements[13] = 0;
-      m_robotictarget_rotation.elements[14] = 0;
-      /*the translation part of the 4x4 matrix from the target robotic transformation M_{robotictarget-world} */
-      var v_robotictarget_rotated_translate = new THREE.Vector4(
-        obj_robotic_target.matrix.elements[12],
-        obj_robotic_target.matrix.elements[13],
-        obj_robotic_target.matrix.elements[14]);
-      /*the !intrinsic! translation of the target transformation*/
-      var m_inverse_robotictarget_rotation = new THREE.Matrix4();
-      m_inverse_robotictarget_rotation = m_inverse_robotictarget_rotation.getInverse(m_robotictarget_rotation); // trasnpose!?
-      var v_robotictarget_translate = new THREE.Vector4();
-      v_robotictarget_translate.copy(v_robotictarget_rotated_translate);
-      v_robotictarget_translate = v_robotictarget_translate.applyMatrix4(m_inverse_robotictarget_rotation);
-      /*the !intrinsic! rotation angles of the target transformation*/
-      var v_robotictarget_rotation_angles/*rad*/ = RTGEO.to_Euler_ZXY_Vector4(m_robotictarget_rotation);
-
-      /* calculate transformation of the target robotic but only z rotated:
-         M_{robotictargetZ-world} */
-      var m_robotictargetZ_transform = RTGEO.create_Euler_ZXY_Matrix4(0, 0, v_robotictarget_rotation_angles.z);
-      v_robotictarget_translate = v_robotictarget_translate.applyMatrix4(m_robotictargetZ_transform);
-      m_robotictargetZ_transform.elements[12] = v_robotictarget_translate.x;
-      m_robotictargetZ_transform.elements[13] = v_robotictarget_translate.y;
-      m_robotictargetZ_transform.elements[14] = v_robotictarget_translate.z;
-
-      // M_{robotictargetZ-couchtarget}
-      var m_robotictargetZ_couchtarget_transform = RTGEO.create_isocentric_ZXY_Matrix4/*default*/(
+      // [M_{robotictarget-world}_R, V_{robotictarget-world}_T]: intrisic rotation and translation from M_{robotictarget-world} 
+      var [m_robotictarget_transform_R, v_robotictarget_translate] = RTGEO.extract_intrinsic_R_T(obj_robotic_target.matrix);
+      // M_{robotictarget-world}_Rz_RzT: keep only rotaion Z effect
+      const m_robotictarget_transform_Rz_RzT = RTGEO.create_isocentric_ZXY_Matrix4/*default*/(
+        0, 0, RTGEO.to_Euler_ZXY_Vector4(m_robotictarget_transform_R).z/*rad*/,
+        v_robotictarget_translate.x, v_robotictarget_translate.y, v_robotictarget_translate.z
+      );
+      // M_{robotictarget-couchtarget} =  M_{robotic-couch}
+      const m_robotictarget_couchtarget_transform = RTGEO.create_isocentric_ZXY_Matrix4/*default*/(
         RTGEO.degree_to_rad(config_robotic_couch_transf.rotateX),
         RTGEO.degree_to_rad(config_robotic_couch_transf.rotateY),
         RTGEO.degree_to_rad(config_robotic_couch_transf.rotateZ),
         config_robotic_couch_transf.translateX,
         config_robotic_couch_transf.translateY,
         config_robotic_couch_transf.translateZ);
-      // M_{robotictargetZ-couchtarget}^-1
-      var m_inverse_robotictargetZ_couchtarget_transform = new THREE.Matrix4();
-      m_inverse_robotictargetZ_couchtarget_transform = m_inverse_robotictargetZ_couchtarget_transform.getInverse(m_robotictargetZ_couchtarget_transform);
-      // M_{couchtarget-world} = M_{robotictargetZ-world} * M_{robotictargetZ-couchtarget}^-1
-      var m_couchtarget_transform = new THREE.Matrix4();
-      m_couchtarget_transform = m_couchtarget_transform.multiplyMatrices(m_robotictargetZ_transform, m_inverse_robotictargetZ_couchtarget_transform);
+      // M_{robotictarget-couchtarget}^-1
+      const m_inverse_robotictarget_couchtarget_transform = new THREE.Matrix4();
+      m_inverse_robotictarget_couchtarget_transform.getInverse(m_robotictarget_couchtarget_transform);
+      // M_{couchtarget-world} = M_{robotictarget-world} * M_{robotictarget-couchtarget}^-1
+      const m_couchtarget_transform = new THREE.Matrix4();
+      m_couchtarget_transform.multiplyMatrices(m_robotictarget_transform_Rz_RzT, m_inverse_robotictarget_couchtarget_transform);
       obj_couch_target.matrix = m_couchtarget_transform;
       obj_couch_target.matrixAutoUpdate = false;
     }
 
     {// BASE
       // M_{base-world}
-      var m_base_transform = RTGEO.create_isocentric_ZXY_Matrix4/*default*/(
+      const m_base_transform = RTGEO.create_isocentric_ZXY_Matrix4/*default*/(
         RTGEO.degree_to_rad(config_base_world_transf.rotateX),
         RTGEO.degree_to_rad(config_base_world_transf.rotateY),
         RTGEO.degree_to_rad(config_base_world_transf.rotateZ),
         config_base_world_transf.translateX,
         config_base_world_transf.translateY,
         config_base_world_transf.translateZ);
-
-      var v_couch_rotation_angles/*rad*/ = RTGEO.to_Euler_ZXY_Vector4(obj_couch.matrix);
-      var m_couch_rot_z = RTGEO.create_Euler_ZXY_Matrix4(0, 0, v_couch_rotation_angles.z);
-      m_base_transform = m_base_transform.multiplyMatrices(m_couch_rot_z, m_base_transform);
-
+      // M_{baset-world} = M_{couch-world}_Rz * M_{base-world}
+      const v_couch_rotation_angles/*rad*/ = RTGEO.to_Euler_ZXY_Vector4(obj_couch.matrix);
+      const m_couch_rot_z = RTGEO.create_Euler_ZXY_Matrix4(0, 0, v_couch_rotation_angles.z);
+      m_base_transform.multiplyMatrices(m_couch_rot_z, m_base_transform);
+      // assign matrix
       obj_base.matrix = m_base_transform;
       obj_base.matrixAutoUpdate = false;
     }
     {// BASE_TARGET
       // M_{basetarget-world}
-      var m_basetarget_transform = RTGEO.create_isocentric_ZXY_Matrix4/*default*/(
+      const m_basetarget_transform = RTGEO.create_isocentric_ZXY_Matrix4/*default*/(
         RTGEO.degree_to_rad(config_base_world_transf.rotateX),
         RTGEO.degree_to_rad(config_base_world_transf.rotateY),
         RTGEO.degree_to_rad(config_base_world_transf.rotateZ),
         config_base_world_transf.translateX,
         config_base_world_transf.translateY,
         config_base_world_transf.translateZ);
-
-      var v_couchtarget_rotation_angles/*rad*/ = RTGEO.to_Euler_ZXY_Vector4(obj_couch_target.matrix);
-      var m_couchtarget_rot_z = RTGEO.create_Euler_ZXY_Matrix4(0, 0, v_couchtarget_rotation_angles.z);
-      m_basetarget_transform = m_basetarget_transform.multiplyMatrices(m_couchtarget_rot_z, m_basetarget_transform);
-
+      // M_{basetarget-world} = M_{couchtarget-world}_Rz * M_{basetarget-world}
+      const v_couchtarget_rotation_angles/*rad*/ = RTGEO.to_Euler_ZXY_Vector4(obj_couch_target.matrix);
+      const m_couchtarget_rot_z = RTGEO.create_Euler_ZXY_Matrix4(0, 0, v_couchtarget_rotation_angles.z);
+      m_basetarget_transform.multiplyMatrices(m_couchtarget_rot_z, m_basetarget_transform);
+      // assin matrix
       obj_base_target.matrix = m_basetarget_transform;
       obj_base_target.matrixAutoUpdate = false;
+    }
+
+    debug_verify();
+
+  };
+
+  var debug_verify = function () {
+    
+    if (ctri_debug.debug_verify_correction_enable) {
+
+      // M_{top-world}: couch top initial position
+      const m_top_transform = obj_top.matrix;
+      // M_{toptarget-world}: couch top target position
+      const m_toptarget_transform = obj_top_target.matrix;
+      // M_{bodytarget-wolrd} = M_{correction} * M_{body-wolrd}
+      const m_bodytarget_transform = obj_body_target.matrix;
+      const m_body_transform = obj_body.matrix;
+      const m_inverse_body_transform = new THREE.Matrix4();
+      m_inverse_body_transform.getInverse(m_body_transform);
+      // M_{correction}
+      const m_correction_transform = new THREE.Matrix4();
+      m_correction_transform.multiplyMatrices(m_bodytarget_transform, m_inverse_body_transform);
+      // to verify if
+      // M_{toptarget-world} = M_{correction} * M_{top-world}
+      const m_toptarget_transform_verify = new THREE.Matrix4();
+      m_toptarget_transform_verify.multiplyMatrices(m_correction_transform, m_top_transform);
+      const tolerance = ctri_debug.debug_verify_matrics_equal_tolerance;
+      for (var i = 0; i < 16; i++) {
+        const deviation = m_toptarget_transform_verify.elements[i] - m_toptarget_transform.elements[i];
+        console.assert(Math.abs(deviation) < tolerance, m_toptarget_transform_verify.elements, m_toptarget_transform.elements);
+      }
+
     }
 
   };
@@ -667,15 +667,15 @@ var rt_scene = (function () {
 
     // init lights
     {
-      var ambLight = new THREE.AmbientLight(0x303030);
+      const ambLight = new THREE.AmbientLight(0x303030);
       scene.add(ambLight);
-      var light1 = new THREE.DirectionalLight(0xffffff, .6);
+      const light1 = new THREE.DirectionalLight(0xffffff, .6);
       light1.position.set(800, 400, 800);
       scene.add(light1);
-      var light2 = new THREE.DirectionalLight(0xffffff, .3);
+      const light2 = new THREE.DirectionalLight(0xffffff, .3);
       light2.position.set(-400, -400, 800);
       scene.add(light2);
-      var light3 = new THREE.DirectionalLight(0xffffff, .1);
+      const light3 = new THREE.DirectionalLight(0xffffff, .1);
       light3.position.set(0, 0, -400);
       scene.add(light3);
     }
@@ -696,7 +696,7 @@ var rt_scene = (function () {
       renderer.setClearColor(0xf0f0f0);
       renderer.setPixelRatio(window.devicePixelRatio);
       renderer.setSize(window.innerWidth, window.innerHeight);
-      var container = document.getElementById(canvas);
+      const container = document.getElementById(canvas);
       container.appendChild(renderer.domElement);
     }
 
@@ -719,8 +719,8 @@ var rt_scene = (function () {
     requestAnimationFrame(show);
 
     // do animation under a specific max fps
-    var now = Date.now();
-    var delta = now - then;
+    const now = Date.now();
+    const delta = now - then;
     if (delta > interval) {
       then = now - (delta % interval);
     }
