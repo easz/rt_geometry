@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<!-- saved from url=(0014)about:internet -->
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=yes, minimum-scale=1.0, maximum-scale=1.">
+    <title>Playground</title>
+    <link rel="stylesheet" type="text/css" href="css/basic-layout.css">
+    <style>
+    </style>
+</head>
+
+<body>
+    <!-- basic layout defined in css/basic-layout.css -->
+    <div id="loading"><h1>L O A D I N G ...</h1></div>
+    <div id="layout">
+        <div id="scene"></div>
+        <div id="etd">A mock app can go here...</div>
+        <div id="info">It would be something like <a href="https://easz.github.io/rt_geometry/rt_scene.html">this</a></div>
+    </div>
+    
+    <script type="module">
+        // loading Three.js libs
+        import * as THREE from './js/three.js-r115/build/three.module.js';
+        import { OrbitControls } from './js/three.js-r115/examples/jsm/controls/OrbitControls.js';
+        import { OBJLoader } from './js/three.js-r115/examples/jsm/loaders/OBJLoader.js';
+
+        // scene control
+        // --------------
+        var ctrl_gantry_beam_mv_on = true;
+        var ctrl_gantry_speed = 10; /* degree/s */
+        var ctrl_gantry_moving = true;    
+        var ctrl_patient_oot = false; /* out of tolerance */
+        var ctrl_camera_on = true;
+        var ctrl_xray_triggerd = true;
+        // --------------
+
+        // scene objects and configuration
+        // ----------------
+        var scene;
+        var scene_camera;
+        var scene_controls; /* e.g. mouse */
+        var scene_renderer;
+        const scene_renderer_fps = 60;              /* animation fps */
+        var scene_renderer_timestamp_ms = Date.now();  /* the last time when the scene is rendered */
+        const scene_background = 0xfbfbfb;
+
+        var scene_obj_couch;
+        var scene_obj_couch_top;
+        var scene_obj_patient;
+        var scene_obj_patient_isocenter;
+        var scene_obj_isocenter;
+        var scene_obj_camera;
+        var scene_obj_camera_fov1;
+        var scene_obj_camera_fov2;
+        var scene_obj_flat_panel_1;
+        var scene_obj_flat_panel_2;
+        var scene_obj_xray_src_1;
+        var scene_obj_xray_src_2;
+        var scene_obj_xray_fov_1;
+        var scene_obj_xray_fov_2;
+        var scene_obj_gantry;
+        var scene_obj_gantry_beam_mv;
+        // ----------------
+
+        var clock = new THREE.Clock();
+
+        function scene_init() {
+            // DOM: where to append the scene
+            var container = document.getElementById('scene');
+            const container_width = container.clientWidth;
+            const container_height = container.clientHeight;
+
+            // init camera
+            scene_camera = new THREE.PerspectiveCamera(60, container_width / container_height, 1, 7000);
+            //scene_camera = new THREE.OrthographicCamera(container_width / -2, container_height / 2, container_height / 2, container_width / -2, 1, 7000);
+            scene_camera.position.set(900, -1600, 1400);
+            scene_camera.up.set(0, 0, 1);
+            scene_camera.lookAt(new THREE.Vector3(0, -200, 0));
+
+            // init scene
+            scene = new THREE.Scene();
+
+            // init lights
+            var ambLight = new THREE.AmbientLight(0x303030);
+            scene.add(ambLight);
+            var light1 = new THREE.DirectionalLight(0xffffff, .6);
+            light1.position.set(3000, 1500, 3000);
+            scene.add(light1);
+            var light2 = new THREE.DirectionalLight(0xffffff, .5);
+            light2.position.set(-3000, -1500, 3000);
+            scene.add(light2);
+            var light3 = new THREE.DirectionalLight(0xffffff, .5);
+            light3.position.set(1000, -3000, 1000);
+            scene.add(light3);
+
+            // init obbjects
+            {
+                
+                {// gantry
+                    const scene_obj_gantry_size_x = 700;
+                    const scene_obj_gantry_size_y = 300;
+                    const scene_obj_gantry_height = 2000;
+                    
+                    const scene_obj_gantry_arm_size_x = 700;
+                    const scene_obj_gantry_arm_size_y = 1000;
+                    const scene_obj_gantry_arm_height = 250;
+
+                    const scene_obj_gantry_head_size = scene_obj_gantry_arm_size_y / 4;
+                    const scene_obj_gantry_head_height = 200;
+
+                    scene_obj_gantry = new THREE.Mesh(new THREE.BoxGeometry(scene_obj_gantry_size_x, scene_obj_gantry_size_y, scene_obj_gantry_height),
+                        new THREE.MeshLambertMaterial({ color: 0xffb399 }));
+                    var scene_obj_gantry_arm = new THREE.Mesh(new THREE.BoxGeometry(scene_obj_gantry_arm_size_x, scene_obj_gantry_arm_size_y, scene_obj_gantry_arm_height),
+                        new THREE.MeshLambertMaterial({ color: 0xffb399 }));
+                    var scene_obj_gantry_head = new THREE.Mesh(new THREE.CylinderGeometry(scene_obj_gantry_head_size, scene_obj_gantry_head_size, scene_obj_gantry_head_height, 32),
+                        new THREE.MeshLambertMaterial({ color: 0xffb399 }));
+                    scene_obj_gantry_beam_mv = new THREE.Mesh(new THREE.CylinderGeometry(15, 15, (scene_obj_gantry_height - scene_obj_gantry_arm_height - scene_obj_gantry_arm_height)/2, 12),
+                        new THREE.MeshLambertMaterial({ color: 0xff0000 }));
+
+                    scene_obj_gantry_beam_mv.position.set(0, -scene_obj_gantry_head_height - scene_obj_gantry_arm_height/2, 0);
+                    scene_obj_gantry_head.add(scene_obj_gantry_beam_mv);
+
+                    scene_obj_gantry_head.rotateX(THREE.Math.degToRad(90));
+                    scene_obj_gantry_head.position.set(0, 0, -scene_obj_gantry_head_height);
+                    scene_obj_gantry_arm.add(scene_obj_gantry_head);
+
+                    scene_obj_gantry_arm.position.set(0, -scene_obj_gantry_arm_size_y/2 - scene_obj_gantry_size_y/2, scene_obj_gantry_height/2 - scene_obj_gantry_arm_height/2);
+                    scene_obj_gantry.add(scene_obj_gantry_arm);
+
+                    scene_obj_gantry.position.set(0, scene_obj_gantry_arm_size_y/2 + scene_obj_gantry_size_y/2, 0);
+                    scene.add(scene_obj_gantry);
+                }
+                { // couch and top
+                    const scene_obj_couch_height = 900;
+        
+                    scene_obj_couch = new THREE.Mesh(new THREE.BoxGeometry(450, 500, scene_obj_couch_height),
+                        new THREE.MeshLambertMaterial({ color: 0xffb399 }));
+                    scene_obj_couch_top = new THREE.Mesh(new THREE.BoxGeometry(500, 1700, 50),
+                        new THREE.MeshLambertMaterial({ color: 0x301d1d }));
+
+                    scene_obj_couch_top.position.set(0, 300, scene_obj_couch_height/2);
+
+                    scene_obj_couch.add(scene_obj_couch_top);
+                    scene_obj_couch.position.set(0, -800, -600);
+
+                    scene.add(scene_obj_couch);
+                }
+
+                { // fixed isocenter cross
+                    var buildAxis = function (src, dst, color) {
+                        var geom = new THREE.Geometry()
+                        var mat = new THREE.LineBasicMaterial({ linewidth: 10, color: color });
+                        geom.vertices.push(src.clone());
+                        geom.vertices.push(dst.clone());
+                        //geom.computeLineDistances();
+                        var axis = new THREE.LineSegments(geom, mat);
+                        return axis;
+                    }
+                    var buildAxes = function (length) {
+                        var axes = new THREE.Object3D();
+                        axes.add(buildAxis(new THREE.Vector3(-length, 0, 0), new THREE.Vector3(length, 0, 0), 0x0000ff)); // X
+                        axes.add(buildAxis(new THREE.Vector3(0, -length, 0), new THREE.Vector3(0, length, 0), 0x00ff00)); // Y
+                        axes.add(buildAxis(new THREE.Vector3(0, 0, -length), new THREE.Vector3(0, 0, length), 0xff0000)); // Z
+                        return axes;
+                    }
+
+                    var axes = buildAxes(50);
+                    scene.add(axes);
+                }
+
+                { // fixed camera setup
+                    const scene_obj_camera_fov_size = 300;
+                    const scene_obj_camera_fov_length = 1800;
+                    const scene_obj_camera_fov_tilt = 4;
+
+                    const scene_obj_camera_fov_geometry = new THREE.ConeGeometry(scene_obj_camera_fov_size, scene_obj_camera_fov_length, 32);
+                    const scene_obj_camera_fov_material = new THREE.MeshPhongMaterial({ color: 0xf674f6, transparent: true, opacity: 0.1, depthWrite: false });
+                    
+                    const scene_obj_camera_intra_distance = 450;
+
+                    scene_obj_camera = new THREE.Mesh(new THREE.BoxGeometry(scene_obj_camera_intra_distance, 50, 50),
+                        new THREE.MeshLambertMaterial({ color: 0xffbf00 }));
+
+                    scene_obj_camera_fov1 = new THREE.Mesh(scene_obj_camera_fov_geometry, scene_obj_camera_fov_material);
+                    scene_obj_camera_fov2 = new THREE.Mesh(scene_obj_camera_fov_geometry, scene_obj_camera_fov_material);
+
+                    scene_obj_camera_fov1.rotateZ(THREE.Math.degToRad(-scene_obj_camera_fov_tilt));
+                    scene_obj_camera_fov1.translateY(-scene_obj_camera_fov_length/2);
+                    scene_obj_camera_fov1.translateX(+scene_obj_camera_fov_size/2);
+
+                    scene_obj_camera_fov2.rotateZ(THREE.Math.degToRad(+scene_obj_camera_fov_tilt));
+                    scene_obj_camera_fov2.translateY(-scene_obj_camera_fov_length/2);
+                    scene_obj_camera_fov2.translateX(-scene_obj_camera_fov_size/2);
+
+                    scene_obj_camera.add(scene_obj_camera_fov1);
+                    scene_obj_camera.add(scene_obj_camera_fov2);
+
+                    scene_obj_camera.rotateX(THREE.Math.degToRad(135));
+                    scene_obj_camera.position.set(0, -1000, 1000);
+
+                    scene.add(scene_obj_camera);
+                }
+
+                { // fixed xray
+                    const scene_obj_xray_fov_length = 2700;
+                    const scene_obj_flat_panel_size = 500;
+
+                    const scene_obj_xray_src_geometry = new THREE.CylinderGeometry(120, 100, 100, 5);
+                    const scene_obj_xray_src_material = new THREE.MeshLambertMaterial({ color: 0xffbf00 });
+
+                    const scene_obj_xray_fov_geometry = new THREE.CylinderGeometry(50, scene_obj_flat_panel_size*.6, scene_obj_xray_fov_length, 4);
+                    const scene_obj_xray_fov_material = new THREE.MeshPhongMaterial({ color: 0xffff00, transparent: true, opacity: 0.2, depthWrite: false });
+
+                    const scene_obj_xray_flat_panel_geometry = new THREE.BoxGeometry(scene_obj_flat_panel_size, scene_obj_flat_panel_size, 35);
+                    const scene_obj_xray_flat_panel_material = new THREE.MeshLambertMaterial({ color: 0xcfcfcf, transparent: true, opacity: 0.8 });
+
+                    scene_obj_flat_panel_1 = new THREE.Mesh(scene_obj_xray_flat_panel_geometry, scene_obj_xray_flat_panel_material);
+                    scene_obj_flat_panel_2 = new THREE.Mesh(scene_obj_xray_flat_panel_geometry, scene_obj_xray_flat_panel_material);
+
+                    scene_obj_xray_fov_1 = new THREE.Mesh(scene_obj_xray_fov_geometry, scene_obj_xray_fov_material);
+                    scene_obj_xray_fov_2 = new THREE.Mesh(scene_obj_xray_fov_geometry, scene_obj_xray_fov_material);
+
+                    scene_obj_xray_src_1 = new THREE.Mesh(scene_obj_xray_src_geometry, scene_obj_xray_src_material);
+                    scene_obj_xray_src_2 = new THREE.Mesh(scene_obj_xray_src_geometry, scene_obj_xray_src_material);
+
+                    const scene_obj_xray_fov_rot_x = 90;
+                    const scene_obj_xray_fov_rot_y = 45;
+                    const scene_obj_xray_flat_panel_rot_x = 210;
+                    const scene_obj_xray_flat_panel_rot_y = 35;
+
+                    scene_obj_xray_src_1.rotateX(THREE.Math.degToRad(90));
+                    scene_obj_xray_src_1.translateY(scene_obj_xray_fov_length);
+                    scene_obj_flat_panel_1.add(scene_obj_xray_src_1);
+
+                    scene_obj_xray_fov_1.rotateX(THREE.Math.degToRad(scene_obj_xray_fov_rot_x));
+                    scene_obj_xray_fov_1.rotateY(THREE.Math.degToRad(scene_obj_xray_fov_rot_y));
+                    scene_obj_xray_fov_1.translateY(scene_obj_xray_fov_length/2);
+                    scene_obj_flat_panel_1.add(scene_obj_xray_fov_1);
+
+                    scene_obj_flat_panel_1.rotateX(THREE.Math.degToRad(scene_obj_xray_flat_panel_rot_x));
+                    scene_obj_flat_panel_1.rotateY(THREE.Math.degToRad(scene_obj_xray_flat_panel_rot_y));
+                    scene_obj_flat_panel_1.translateZ(-scene_obj_xray_fov_length/2);
+
+                    scene_obj_xray_src_2.rotateX(THREE.Math.degToRad(90));
+                    scene_obj_xray_src_2.translateY(scene_obj_xray_fov_length);
+                    scene_obj_flat_panel_2.add(scene_obj_xray_src_2);
+
+                    scene_obj_xray_fov_2.rotateX(THREE.Math.degToRad(scene_obj_xray_fov_rot_x));
+                    scene_obj_xray_fov_2.rotateY(THREE.Math.degToRad(scene_obj_xray_fov_rot_y));
+                    scene_obj_xray_fov_2.translateY(scene_obj_xray_fov_length/2);
+                    scene_obj_flat_panel_2.add(scene_obj_xray_fov_2);
+
+                    scene_obj_flat_panel_2.rotateX(THREE.Math.degToRad(scene_obj_xray_flat_panel_rot_x));
+                    scene_obj_flat_panel_2.rotateY(THREE.Math.degToRad(-scene_obj_xray_flat_panel_rot_y));
+                    scene_obj_flat_panel_2.translateZ(-scene_obj_xray_fov_length/2);
+
+                    scene.add(scene_obj_flat_panel_1);
+                    scene.add(scene_obj_flat_panel_2);
+                }
+                { // patient
+                    const scene_obj_patient_model = 'model/Homer.reduced.OBJ';
+                    const scene_obj_patient_scale = 200;
+                    const scene_obj_patient_material = new THREE.MeshPhongMaterial({ color: 0xFED90F, transparent: true, opacity: 0.8, depthWrite: true });
+                   
+                    var loader = new OBJLoader();
+                    loader.load(scene_obj_patient_model, 
+                        function ( object ) {
+                            scene_obj_patient = object;
+                            scene_obj_patient.traverse( function ( child )
+                            {
+                                if ( child.isMesh ) {
+                                    child.material = scene_obj_patient_material;
+                                }
+                            });
+                            scene_obj_patient.scale.set(scene_obj_patient_scale, scene_obj_patient_scale, scene_obj_patient_scale);
+                            scene_obj_patient.position.set(0, -450, 0);
+                            scene_obj_patient.visible = true;
+                            scene.add(scene_obj_patient);
+                        
+                            // QnD loading page dismiss
+                            document.querySelector("#loading").style.display = 'none';
+                        },
+                        function ( xhr ) { 
+                            if ( xhr.lengthComputable ) {
+                                var percentComplete = xhr.loaded / xhr.total * 100;
+                                console.log( scene_obj_patient_model + ': ' + Math.round( percentComplete, 2 ) + '% downloaded' );
+                            }
+                        },
+                        function ( ) { console.log( 'An error happened with loading: ' + scene_obj_patient_model ); }
+                        ); // loader.load
+                }
+            }
+
+            // init renderer
+            scene_renderer = new THREE.WebGLRenderer({ antialias: true }); // WebGLRenderer CanvasRenderer
+            scene_renderer.setClearColor(scene_background);
+            scene_renderer.setPixelRatio(window.devicePixelRatio);
+            scene_renderer.setSize(container_width, container_height);
+            //scene_renderer.shadowMap.enabled = true;
+            //scene_renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+            // init control
+            scene_controls = new OrbitControls(scene_camera, scene_renderer.domElement);
+            scene_controls.enableDamping = true;
+            scene_controls.dampingFactor = 0.05;
+            scene_controls.minDistance = 500;
+            scene_controls.maxDistance = 3200;
+            scene_controls.maxPolarAngle = Math.PI / 2;
+            scene_controls.maxAzimuthAngle = Math.PI / 1.2;
+            scene_controls.minAzimuthAngle = -Math.PI / 1.2;
+
+            scene_controls.panSpeed = 0.8;
+            scene_controls.rotateSpeed = 0.7;
+            scene_controls.zoomSpeed = 0.2;
+
+            // append to DOM
+            container.appendChild(scene_renderer.domElement);
+
+            window.addEventListener('resize', onWindowResize, false);
+        }
+
+        function scene_animation_update( elapsed_ms ) {
+            if (ctrl_gantry_moving) {
+                scene_obj_gantry.rotateOnAxis(new THREE.Vector3(0, 1, 0), THREE.Math.degToRad(elapsed_ms*ctrl_gantry_speed/1000));
+            }
+
+            scene_obj_gantry_beam_mv.visible = ctrl_gantry_beam_mv_on;
+
+            scene_obj_camera_fov1.visible = ctrl_camera_on;
+            scene_obj_camera_fov2.visible = ctrl_camera_on;
+
+            scene_obj_xray_fov_1.visible = ctrl_xray_triggerd;
+            scene_obj_xray_fov_2.visible = ctrl_xray_triggerd;
+        }
+
+        // animation/window routines
+        function onWindowResize() {
+            var container = document.getElementById('scene');
+            var container_width = container.clientWidth;
+            var container_height = container.clientHeight;
+
+            scene_camera.aspect = container_width / container_height;
+            scene_camera.updateProjectionMatrix();
+            scene_renderer.setSize(container_width, container_height);
+        }
+
+        function scene_render() {
+            scene_renderer.render(scene, scene_camera);
+        }
+
+        function scene_animate() {
+            requestAnimationFrame(scene_animate);
+
+            var delta = clock.getDelta();
+
+            scene_controls.update(); // only required if controls.enableDamping = true, or if controls.autoRotate = true
+
+            // do animation under the specific max fps
+            var now = Date.now();
+            var elapsed_ms = now - scene_renderer_timestamp_ms;
+            var interval_ms = 1000 / scene_renderer_fps;
+            if (elapsed_ms > interval_ms) {
+                scene_renderer_timestamp_ms = now - (elapsed_ms % interval_ms);
+            }
+            else {
+                return;
+            }
+
+            scene_animation_update( elapsed_ms );
+
+            scene_render();
+        }
+
+        scene_init();
+        scene_animate();
+    </script>
+</body>
+
+</html>
