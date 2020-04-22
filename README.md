@@ -4,5 +4,5 @@
 
 [RT Scene](https://easz.github.io/rt_geometry/rt_scene.html)
 
-[Playground](https://easz.github.io/rt_geometry/playground/index.html)
+[Playground](https://easz.github.io/rt_geometry/playground/)
 
