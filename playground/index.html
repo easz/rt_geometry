@@ -7,8 +7,8 @@
     <meta name="viewport" content="width=device-width, user-scalable=yes, minimum-scale=1.0, maximum-scale=1.">
     <title>Playground</title>
     <link rel="stylesheet" type="text/css" href="css/basic-layout.css">
-    <style>
-    </style>
+    <link rel="stylesheet" type="text/css" href="css/info-layout.css">
+    <link rel="stylesheet" type="text/css" href="css/app-layout.css">
 </head>
 
 <body>
@@ -16,8 +16,20 @@
     <div id="loading"><h1>L O A D I N G ...</h1></div>
     <div id="layout">
         <div id="scene"></div>
-        <div id="etd">A mock app can go here...</div>
-        <div id="info">It would be something like <a href="https://easz.github.io/rt_geometry/rt_scene.html">this</a></div>
+        <div id="app">
+            <div id="layout-app">
+                <div id="xray_img_1"></div>
+                <div id="xray_img_2"></div>
+                <div id="xray_readout"></div>
+                <div id="cam_readout"></div>
+                <div id="warning_sign"></div>
+                <div id="timeline"></div>
+                <div id="statusbar"></div>
+            </div>
+        </div>
+        <div id="info">
+            <img id="patient_profile" src="model/homer-profile.jpg"/>
+        </div>
     </div>
     
     <script type="module">
@@ -333,6 +345,15 @@
 
             scene_obj_xray_fov_1.visible = ctrl_xray_triggerd;
             scene_obj_xray_fov_2.visible = ctrl_xray_triggerd;
+
+            // TODO: move this code to the trigger
+            var patient_image = document.getElementById("patient_profile");
+            if (ctrl_patient_oot) {
+                patient_image.src = "model/homer-profile-coughing.jpg";
+            }
+            else {
+                patient_image.src = "model/homer-profile.jpg";
+            }
         }
 
         // animation/window routines
