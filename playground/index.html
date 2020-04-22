@@ -25,6 +25,10 @@
                 <div id="warning_sign"></div>
                 <div id="timeline"></div>
                 <div id="statusbar"></div>
+                <div id="console">
+                <button type="button" id="button_xray">Take Xray images</button>
+                <button type="button" id="button_repos" disabled="true">Reposition</button>
+                </div>
             </div>
         </div>
         <div id="info">
@@ -38,17 +42,24 @@
         import { OrbitControls } from './js/three.js-r115/examples/jsm/controls/OrbitControls.js';
         import { OBJLoader } from './js/three.js-r115/examples/jsm/loaders/OBJLoader.js';
 
-        // scene control
-        // --------------
-        var ctrl_gantry_beam_mv_on = true;
-        var ctrl_gantry_speed = 10; /* degree/s */
-        var ctrl_gantry_moving = true;    
-        var ctrl_patient_oot = false; /* out of tolerance */
-        var ctrl_camera_on = true;
-        var ctrl_xray_triggerd = true;
-        // --------------
+        // Playground 
+        // ----------
+        /** pg_s_loadling -> pg_s_loaded -> pg_s_preview -> pg_s_interactive */
+        var pg_state = "pg_s_loadling";
 
-        // scene objects and configuration
+        const ctrl_pg_preview_duration_ms = 1 * 1000;
+        const ctrl_pg_state_transition_interval_ms = 1000; // the interval of evaluating state transition
+        const ctrl_pg_patient_oot_rate = 0.06; /* out-of-toelrance probability (evaluated per ctrl_pg_state_transition_interval_ms) */
+        const ctrl_pg_patient_oot_after_repos_at_least_ms = 5000; /* we trigger oot not immediately after a repos */
+        var ctrl_pg_patient_oot_last_oot_repos_timestamp_ms = Date.now(); 
+        // ----------
+
+        /** wf_s_treating -> wf_s_patient_oot -> wf_s_imaging -> wf_s_fusion -> wf_s_couch_move 
+                   ^-------------------------------------------------------------|
+         */
+        var wf_state = "wf_s_treating";
+
+        // scene objects
         // ----------------
         var scene;
         var scene_camera;
@@ -75,6 +86,16 @@
         var scene_obj_gantry;
         var scene_obj_gantry_beam_mv;
         // ----------------
+
+        // scene control
+        // --------------
+        var ctrl_gantry_beam_mv_on = true;
+        var ctrl_gantry_speed_default = 10; /* degree/s */
+        var ctrl_gantry_speed = ctrl_gantry_speed_default;
+        var ctrl_camera_on = true;
+        var ctrl_xray_triggerd = false;
+        var ctrl_xray_expose_time_ms = 500;
+        // --------------
 
         var clock = new THREE.Clock();
 
@@ -184,7 +205,7 @@
 
                 { // fixed camera setup
                     const scene_obj_camera_fov_size = 300;
-                    const scene_obj_camera_fov_length = 1800;
+                    const scene_obj_camera_fov_length = 1450;
                     const scene_obj_camera_fov_tilt = 4;
 
                     const scene_obj_camera_fov_geometry = new THREE.ConeGeometry(scene_obj_camera_fov_size, scene_obj_camera_fov_length, 32);
@@ -291,8 +312,11 @@
                             scene_obj_patient.visible = true;
                             scene.add(scene_obj_patient);
                         
-                            // QnD loading page dismiss
-                            document.querySelector("#loading").style.display = 'none';
+                            // QnD: loading page dismiss and switch state
+                            {
+                                document.querySelector("#loading").style.display = 'none';
+                                pg_state = 'pg_s_loaded';
+                            }
                         },
                         function ( xhr ) { 
                             if ( xhr.lengthComputable ) {
@@ -334,7 +358,7 @@
         }
 
         function scene_animation_update( elapsed_ms ) {
-            if (ctrl_gantry_moving) {
+            if (ctrl_gantry_speed != 0) {
                 scene_obj_gantry.rotateOnAxis(new THREE.Vector3(0, 1, 0), THREE.Math.degToRad(elapsed_ms*ctrl_gantry_speed/1000));
             }
 
@@ -345,15 +369,6 @@
 
             scene_obj_xray_fov_1.visible = ctrl_xray_triggerd;
             scene_obj_xray_fov_2.visible = ctrl_xray_triggerd;
-
-            // TODO: move this code to the trigger
-            var patient_image = document.getElementById("patient_profile");
-            if (ctrl_patient_oot) {
-                patient_image.src = "model/homer-profile-coughing.jpg";
-            }
-            else {
-                patient_image.src = "model/homer-profile.jpg";
-            }
         }
 
         // animation/window routines
@@ -396,6 +411,111 @@
 
         scene_init();
         scene_animate();
+        // ---
+
+        // simple state management
+        // ----------------------
+        var b_xray = document.getElementById("button_xray");
+        var b_repos = document.getElementById("button_repos");
+        var statusbar = document.getElementById("statusbar");
+        var warning_sign = document.getElementById("warning_sign");
+        b_xray.onmousedown = function()
+        {
+            b_xray.style.background = "yellow";
+            ctrl_xray_triggerd = true;
+
+            if (wf_state == 'wf_s_patient_oot') {
+                wf_state = 'wf_s_imaging';
+            }
+
+            setTimeout(function() {
+                b_xray.style.background = "";
+                ctrl_xray_triggerd = false;
+
+                if (wf_state == 'wf_s_imaging') {
+                    wf_state = 'wf_s_fusion';
+                }
+            }, ctrl_xray_expose_time_ms);
+        };
+        b_repos.onmouseup = function()
+        {
+            b_repos.style.background = "";
+        }
+        b_repos.onmousedown = function()
+        {
+            // TODO: move noly when pressed
+            if (wf_state == 'wf_s_fusion') {
+                wf_state = 'wf_s_couch_move';
+                b_repos.style.background = "orange";
+            }
+
+            setTimeout(function() {
+                if (wf_state == 'wf_s_couch_move') {
+                    ctrl_pg_patient_oot_last_oot_repos_timestamp_ms = Date.now(); 
+                    wf_state = 'wf_s_treating';
+                }
+            }, 3000);
+        };
+        var text_ok = function() {
+            statusbar.innerHTML = "";
+            warning_sign.innerHTML = "Patient position is OK. Radiation treatment is ongoing.";
+            warning_sign.style.backgroundColor = '#98FB98';
+        }
+        var text_oot = function() {
+            statusbar.innerHTML = "Patient movement is detected by surface camera. Please take Xray images to verify patient position.";
+            warning_sign.innerHTML = "Patient position is out of tolerance. Treatment is paused.";
+            warning_sign.style.backgroundColor = '#FFA07A';
+        }
+        setInterval(function () {
+            if (pg_state == 'pg_s_loaded') {
+                pg_state = 'pg_s_preview';
+
+                text_ok();
+
+                setTimeout(function() {
+                    pg_state = 'pg_s_interactive'
+                }, ctrl_pg_preview_duration_ms);
+            }
+            else if (pg_state == 'pg_s_interactive') {
+                var patient_image = document.getElementById("patient_profile");
+                
+                if (wf_state == 'wf_s_treating') {
+
+                    text_ok();
+
+                    patient_image.classList.remove('effect_shake');
+                    patient_image.src = "model/homer-profile.jpg";
+
+                    ctrl_gantry_beam_mv_on = true;
+                    ctrl_gantry_speed = ctrl_gantry_speed_default;
+
+                    b_repos.disabled = true;
+                    b_repos.style.background = "";
+
+                    // randomly trigger OOT
+                    if (Math.random() < ctrl_pg_patient_oot_rate &&
+                        Date.now() - ctrl_pg_patient_oot_last_oot_repos_timestamp_ms > ctrl_pg_patient_oot_after_repos_at_least_ms) {                        
+                        wf_state = 'wf_s_patient_oot';
+
+                        patient_image.classList.add('effect_shake');
+                        patient_image.src = "model/homer-profile-coughing.jpg";
+
+                        ctrl_gantry_beam_mv_on = false;
+                        ctrl_gantry_speed = 0;
+
+                        text_oot();
+                    }
+                }
+                else if (wf_state == 'wf_s_couch_move') {
+                    //b_repos.disabled = true;
+                }
+                else if (wf_state == 'wf_s_fusion') {
+                    b_repos.disabled = false;
+                }
+            }
+        }, ctrl_pg_state_transition_interval_ms);
+        // ----------------------
+
     </script>
 </body>
 

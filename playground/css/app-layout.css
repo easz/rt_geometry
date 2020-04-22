@@ -1,20 +1,10 @@
-/*
-<div id="layout-app">
-                <div id="xray_img_1"></div>
-                <div id="xray_img_2"></div>
-                <div id="xray_readout"></div>
-                <div id="cam_readout"></div>
-                <div id="timeline"></div>
-                <div id="warning_sign"></div>
-                <div id="statusbar"></div>
-            </div>
-           */ 
+/* TODO: make IE happy */ 
 #layout-app {
     display: grid;
 
     grid-template-columns: 40% 40% 10% 10%;
 
-    grid-template-rows: 60% 30% 10%;
+    grid-template-rows: 60% 25% 5% 10%;
 
     height: 100%;
     width: 100%;
@@ -63,6 +53,10 @@
 
     margin: 0px 10px 0px 20px;
     border: 1px solid darkslategray;
+
+    padding: 20px;
+    display : flex;
+    align-items : center;
 }
 
 #timeline {
@@ -81,4 +75,33 @@
 
     margin: 0px;
     border: 1px solid darkslategray;
+
+    padding: 10px;
+    display : flex;
+    align-items : center;
+}
+
+#console {
+    grid-column: 1 /5;
+
+    grid-row: 4;
+
+    margin: 0px;
+    border: 1px solid darkslategray;
+}
+
+#button_xray {
+    width: 49%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0 none;
+}
+
+#button_repos {
+    width: 49%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0 none;
 }
