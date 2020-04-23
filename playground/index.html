@@ -18,16 +18,29 @@
         <div id="scene"></div>
         <div id="app">
             <div id="layout-app">
-                <div id="xray_img_1"></div>
-                <div id="xray_img_2"></div>
-                <div id="xray_readout"></div>
-                <div id="cam_readout"></div>
+                <div id="header"></div>
+                <div id="xray_img_1">
+                    <img id="xray_img_src_1" src="model/homer-brain.jpg"/>
+                </div>
+                <div id="ddr_img_1">
+                    <img id="ddr_img_src_1" src="model/homer-brain.jpg"/>
+                </div>
+                <div id="xray_img_2">
+                    <img id="xray_img_src_2" src="model/homer-brain.jpg"/>
+                </div>
+                <div id="ddr_img_2">
+                    <img id="ddr_img_src_2" src="model/homer-brain.jpg"/>
+                </div>
+                <div id="xray_readout">TODO</div>
+                <div id="cam_readout">TODO</div>
+                <div id="cam_img">TODO</div>
+                <div id="linac_sign">TODO</div>
+                <div id="timeline">TODO</div>
                 <div id="warning_sign"></div>
-                <div id="timeline"></div>
                 <div id="statusbar"></div>
                 <div id="console">
-                <button type="button" id="button_xray">Take Xray images</button>
-                <button type="button" id="button_repos" disabled="true">Reposition</button>
+                <button type="button" id="button_xray">Xray Control</button>
+                <button type="button" id="button_repos" disabled="true">Couch Control</button>
                 </div>
             </div>
         </div>
@@ -50,13 +63,16 @@
         const ctrl_pg_preview_duration_ms = 1 * 1000;
         const ctrl_pg_state_transition_interval_ms = 1000; // the interval of evaluating state transition
         const ctrl_pg_patient_oot_rate = 0.06; /* out-of-toelrance probability (evaluated per ctrl_pg_state_transition_interval_ms) */
-        const ctrl_pg_patient_oot_after_repos_at_least_ms = 5000; /* we trigger oot not immediately after a repos */
-        var ctrl_pg_patient_oot_last_oot_repos_timestamp_ms = Date.now(); 
+        const ctrl_pg_patient_oot_after_repos_at_least_ms = 5000; /* [just for smoothy demo] we trigger oot not immediately after a repos */
+        const ctrl_pg_patient_oot_after_xray_at_least_ms = 5000; /* [just for smoothy demo] we trigger oot not immediately after xrays */
+        var ctrl_pg_patient_last_repos_timestamp_ms = Date.now(); 
+        var ctrl_pg_patient_last_xray_timestamp_ms = Date.now(); 
+        var ctrl_pg_patient_oot_deviation = new THREE.Matrix4();
         // ----------
 
         /** wf_s_treating -> wf_s_patient_oot -> wf_s_imaging -> wf_s_fusion -> wf_s_couch_move 
-                   ^-------------------------------------------------------------|
-         */
+         **        ^-------------------------------------------------------------|
+         **/
         var wf_state = "wf_s_treating";
 
         // scene objects
@@ -72,7 +88,7 @@
         var scene_obj_couch;
         var scene_obj_couch_top;
         var scene_obj_patient;
-        var scene_obj_patient_isocenter;
+        var scene_obj_patient_tumor;
         var scene_obj_isocenter;
         var scene_obj_camera;
         var scene_obj_camera_fov1;
@@ -94,7 +110,7 @@
         var ctrl_gantry_speed = ctrl_gantry_speed_default;
         var ctrl_camera_on = true;
         var ctrl_xray_triggerd = false;
-        var ctrl_xray_expose_time_ms = 500;
+        var ctrl_xray_expose_time_ms = 700;
         // --------------
 
         var clock = new THREE.Clock();
@@ -149,7 +165,7 @@
                         new THREE.MeshLambertMaterial({ color: 0xffb399 }));
                     var scene_obj_gantry_head = new THREE.Mesh(new THREE.CylinderGeometry(scene_obj_gantry_head_size, scene_obj_gantry_head_size, scene_obj_gantry_head_height, 32),
                         new THREE.MeshLambertMaterial({ color: 0xffb399 }));
-                    scene_obj_gantry_beam_mv = new THREE.Mesh(new THREE.CylinderGeometry(15, 15, (scene_obj_gantry_height - scene_obj_gantry_arm_height - scene_obj_gantry_arm_height)/2, 12),
+                    scene_obj_gantry_beam_mv = new THREE.Mesh(new THREE.CylinderGeometry(5, 5, (scene_obj_gantry_height - scene_obj_gantry_arm_height - scene_obj_gantry_arm_height)/2, 12),
                         new THREE.MeshLambertMaterial({ color: 0xff0000 }));
 
                     scene_obj_gantry_beam_mv.position.set(0, -scene_obj_gantry_head_height - scene_obj_gantry_arm_height/2, 0);
@@ -180,7 +196,51 @@
 
                     scene.add(scene_obj_couch);
                 }
+                { // patient
+                    const scene_obj_patient_model = 'model/Homer.reduced.OBJ';
+                    const scene_obj_patient_scale = 200;
+                    const scene_obj_patient_material = new THREE.MeshPhongMaterial({ color: 0xFED90F, transparent: true, opacity: 0.8, depthWrite: true });
+                   
+                    scene_obj_patient_tumor = new THREE.Mesh(new THREE.SphereGeometry(10 / scene_obj_patient_scale, 12, 12),
+                        new THREE.MeshLambertMaterial({ color: 0x00A886 }));
 
+                    var loader = new OBJLoader();
+                    loader.load(scene_obj_patient_model, 
+                        function ( object ) {
+                            scene_obj_patient = object;
+                            scene_obj_patient.traverse( function ( child )
+                            {
+                                if ( child.isMesh ) {
+                                    child.material = scene_obj_patient_material;
+                                }
+                            });
+
+                            // tumor
+                            scene_obj_patient_tumor.position.set(0, 2.25, 0); // FIXME: hardcoded
+                            scene_obj_patient.add(scene_obj_patient_tumor);
+
+                            scene_obj_patient.scale.set(scene_obj_patient_scale, scene_obj_patient_scale, scene_obj_patient_scale);
+                            // XXX: kind of default prepos
+                            scene_obj_patient.position.set(0, 50, 150); // FIXME: hardcoded
+                            scene_obj_patient.visible = true;
+                            // XXX: patient is added to couch top system
+                            scene_obj_couch_top.add(scene_obj_patient);
+                                            
+                            // QnD: loading page dismiss and switch state
+                            {
+                                document.querySelector("#loading").style.display = 'none';
+                                pg_state = 'pg_s_loaded';
+                            }
+                        },
+                        function ( xhr ) { 
+                            if ( xhr.lengthComputable ) {
+                                var percentComplete = xhr.loaded / xhr.total * 100;
+                                console.log( scene_obj_patient_model + ': ' + Math.round( percentComplete, 2 ) + '% downloaded' );
+                            }
+                        },
+                        function ( ) { console.log( 'An error happened with loading: ' + scene_obj_patient_model ); }
+                        ); // loader.load
+                }
                 { // fixed isocenter cross
                     var buildAxis = function (src, dst, color) {
                         var geom = new THREE.Geometry()
@@ -292,41 +352,6 @@
                     scene.add(scene_obj_flat_panel_1);
                     scene.add(scene_obj_flat_panel_2);
                 }
-                { // patient
-                    const scene_obj_patient_model = 'model/Homer.reduced.OBJ';
-                    const scene_obj_patient_scale = 200;
-                    const scene_obj_patient_material = new THREE.MeshPhongMaterial({ color: 0xFED90F, transparent: true, opacity: 0.8, depthWrite: true });
-                   
-                    var loader = new OBJLoader();
-                    loader.load(scene_obj_patient_model, 
-                        function ( object ) {
-                            scene_obj_patient = object;
-                            scene_obj_patient.traverse( function ( child )
-                            {
-                                if ( child.isMesh ) {
-                                    child.material = scene_obj_patient_material;
-                                }
-                            });
-                            scene_obj_patient.scale.set(scene_obj_patient_scale, scene_obj_patient_scale, scene_obj_patient_scale);
-                            scene_obj_patient.position.set(0, -450, 0);
-                            scene_obj_patient.visible = true;
-                            scene.add(scene_obj_patient);
-                        
-                            // QnD: loading page dismiss and switch state
-                            {
-                                document.querySelector("#loading").style.display = 'none';
-                                pg_state = 'pg_s_loaded';
-                            }
-                        },
-                        function ( xhr ) { 
-                            if ( xhr.lengthComputable ) {
-                                var percentComplete = xhr.loaded / xhr.total * 100;
-                                console.log( scene_obj_patient_model + ': ' + Math.round( percentComplete, 2 ) + '% downloaded' );
-                            }
-                        },
-                        function ( ) { console.log( 'An error happened with loading: ' + scene_obj_patient_model ); }
-                        ); // loader.load
-                }
             }
 
             // init renderer
@@ -419,18 +444,37 @@
         var b_repos = document.getElementById("button_repos");
         var statusbar = document.getElementById("statusbar");
         var warning_sign = document.getElementById("warning_sign");
+        var xray_img_src_1 = document.getElementById("xray_img_src_1");
+        var xray_img_src_2 = document.getElementById("xray_img_src_2");
+
+        const b_xray_ready_color  = "#FFFF99";
+        const b_xray_active_color  = "#FFFF00";
+        const b_repos_off_color = "";
+        const b_repos_ready_color = "#ffcdb2";
+        const b_repos_pressed_color = "#e76f51";
+
+        b_xray.style.background = b_xray_ready_color;
+        b_repos.style.background = b_repos_off_color;
+
         b_xray.onmousedown = function()
         {
-            b_xray.style.background = "yellow";
+            ctrl_pg_patient_last_xray_timestamp_ms = Date.now();
+            b_xray.style.background = b_xray_active_color;
             ctrl_xray_triggerd = true;
+
+            xray_img_src_1.classList.remove('effect_bumpin1');
+            xray_img_src_2.classList.remove('effect_bumpin2');
 
             if (wf_state == 'wf_s_patient_oot') {
                 wf_state = 'wf_s_imaging';
             }
 
             setTimeout(function() {
-                b_xray.style.background = "";
+                b_xray.style.background = b_xray_ready_color;
                 ctrl_xray_triggerd = false;
+
+                xray_img_src_1.classList.add('effect_bumpin1');
+                xray_img_src_2.classList.add('effect_bumpin2');
 
                 if (wf_state == 'wf_s_imaging') {
                     wf_state = 'wf_s_fusion';
@@ -439,32 +483,37 @@
         };
         b_repos.onmouseup = function()
         {
-            b_repos.style.background = "";
+            if (wf_state == 'wf_s_couch_move') {
+                b_repos.style.background = b_repos_ready_color;
+            }
         }
         b_repos.onmousedown = function()
         {
             // TODO: move noly when pressed
             if (wf_state == 'wf_s_fusion') {
                 wf_state = 'wf_s_couch_move';
-                b_repos.style.background = "orange";
+                b_repos.style.background = b_repos_pressed_color;
             }
 
             setTimeout(function() {
                 if (wf_state == 'wf_s_couch_move') {
-                    ctrl_pg_patient_oot_last_oot_repos_timestamp_ms = Date.now(); 
+                    ctrl_pg_patient_last_repos_timestamp_ms = Date.now(); 
                     wf_state = 'wf_s_treating';
                 }
-            }, 3000);
+            }, 3000); // FIXME
         };
         var text_ok = function() {
-            statusbar.innerHTML = "";
-            warning_sign.innerHTML = "Patient position is OK. Radiation treatment is ongoing.";
-            warning_sign.style.backgroundColor = '#98FB98';
+            statusbar.innerHTML = "Patient position is OK. You may take Xray images to verify patient position at any time.";
+            warning_sign.innerHTML = "Radiation treatment is ongoing.";
+            warning_sign.style.backgroundColor = '#00A886';
         }
         var text_oot = function() {
             statusbar.innerHTML = "Patient movement is detected by surface camera. Please take Xray images to verify patient position.";
-            warning_sign.innerHTML = "Patient position is out of tolerance. Treatment is paused.";
-            warning_sign.style.backgroundColor = '#FFA07A';
+            warning_sign.innerHTML = "Treatment is paused.";
+            warning_sign.style.backgroundColor = '#EE2375';
+        }
+        var text_couch_move = function() {
+            statusbar.innerHTML = "Please hold the couch control to reposition patient.";
         }
         setInterval(function () {
             if (pg_state == 'pg_s_loaded') {
@@ -490,11 +539,16 @@
                     ctrl_gantry_speed = ctrl_gantry_speed_default;
 
                     b_repos.disabled = true;
-                    b_repos.style.background = "";
+                    b_repos.style.background = b_repos_off_color;
 
                     // randomly trigger OOT
                     if (Math.random() < ctrl_pg_patient_oot_rate &&
-                        Date.now() - ctrl_pg_patient_oot_last_oot_repos_timestamp_ms > ctrl_pg_patient_oot_after_repos_at_least_ms) {                        
+                        Date.now() - ctrl_pg_patient_last_repos_timestamp_ms > ctrl_pg_patient_oot_after_repos_at_least_ms &&
+                        Date.now() - ctrl_pg_patient_last_xray_timestamp_ms > ctrl_pg_patient_oot_after_xray_at_least_ms) {                        
+
+                        ctrl_pg_patient_oot_deviation = new THREE.Matrix4();
+                        ctrl_pg_patient_oot_deviation.makeTranslation(Math.random()*30,Math.random()*30,Math.random()*30);
+
                         wf_state = 'wf_s_patient_oot';
 
                         patient_image.classList.add('effect_shake');
@@ -511,6 +565,8 @@
                 }
                 else if (wf_state == 'wf_s_fusion') {
                     b_repos.disabled = false;
+                    b_repos.style.background = b_repos_ready_color;
+                    text_couch_move();
                 }
             }
         }, ctrl_pg_state_transition_interval_ms);
