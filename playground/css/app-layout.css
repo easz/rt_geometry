@@ -1,4 +1,4 @@
-/* TODO: make IE happy */ 
+/* TODO: make IE happy */
 
 #layout-app {
     display: grid;
@@ -46,7 +46,7 @@
     border: 1px solid darkslategray;
 
     padding: 5px;
-    
+
     opacity: 0.4;
     z-index: 20;
 }
@@ -64,7 +64,7 @@
 
     -webkit-filter: sepia(100%) blur(1px);
     filter: sepia(100%) blur(1px);
-    
+
     opacity: 0.5;
     z-index: 10;
 }
@@ -119,11 +119,13 @@
 
     grid-row: 4;
 
+    padding: 5px;
     margin: 10px 20px 20px 5px;
     border: 1px solid darkslategray;
 
     display : flex;
     align-items : center;
+    text-align: center;
 }
 
 #linac_sign {
@@ -225,7 +227,7 @@
 }
 
 .effect_bumpin1 {
-    animation: bumpin1 1.0s; 
+    animation: bumpin1 1.0s;
     animation-iteration-count: 1;
 }
 
@@ -237,7 +239,7 @@
 }
 
 .effect_bumpin2 {
-    animation: bumpin2 1.0s; 
+    animation: bumpin2 1.0s;
     animation-iteration-count: 1;
 }
 
