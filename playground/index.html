@@ -40,7 +40,7 @@
                 <div id="statusbar"></div>
                 <div id="console">
                 <button type="button" id="button_xray">Xray Control</button>
-                <button type="button" id="button_repos" disabled="true">Couch Control</button>
+                <button type="button" id="button_repos" disabled="true">Poke the Patient</button>
                 </div>
             </div>
         </div>
@@ -48,32 +48,46 @@
             <img id="patient_profile" src="model/homer-profile.jpg"/>
         </div>
     </div>
-    
+
     <script type="module">
         // loading Three.js libs
         import * as THREE from './js/three.js-r115/build/three.module.js';
         import { OrbitControls } from './js/three.js-r115/examples/jsm/controls/OrbitControls.js';
         import { OBJLoader } from './js/three.js-r115/examples/jsm/loaders/OBJLoader.js';
 
-        // Playground 
+        // Playground
         // ----------
         /** pg_s_loadling -> pg_s_loaded -> pg_s_preview -> pg_s_interactive */
         var pg_state = "pg_s_loadling";
-
-        const ctrl_pg_preview_duration_ms = 1 * 1000;
-        const ctrl_pg_state_transition_interval_ms = 1000; // the interval of evaluating state transition
-        const ctrl_pg_patient_oot_rate = 0.06; /* out-of-toelrance probability (evaluated per ctrl_pg_state_transition_interval_ms) */
+        const ctrl_pg_preview_duration_ms = 5 * 1000; // use bigger value to let delay oot trigger
+        const ctrl_pg_state_transition_interval_ms = 500; // the interval polling frequency of evaluating state transition
+        const ctrl_pg_patient_oot_rate = 0.1; /* out-of-toelrance probability (evaluated per ctrl_pg_state_transition_interval_ms) */
         const ctrl_pg_patient_oot_after_repos_at_least_ms = 5000; /* [just for smoothy demo] we trigger oot not immediately after a repos */
         const ctrl_pg_patient_oot_after_xray_at_least_ms = 5000; /* [just for smoothy demo] we trigger oot not immediately after xrays */
-        var ctrl_pg_patient_last_repos_timestamp_ms = Date.now(); 
-        var ctrl_pg_patient_last_xray_timestamp_ms = Date.now(); 
-        var ctrl_pg_patient_oot_deviation = new THREE.Matrix4();
+        var ctrl_pg_patient_last_repos_timestamp_ms = Date.now();
+        var ctrl_pg_patient_last_xray_timestamp_ms = Date.now();
+        var ctrl_pg_patient_oot_deviation_rot = new THREE.Vector3();
+        var ctrl_pg_patient_oot_deviation_trans = new THREE.Vector3();
+        var ctrl_pg_couch_oot_correct_rot = new THREE.Vector3();
+        var ctrl_pg_couch_oot_correct_trans = new THREE.Vector3();
         // ----------
 
-        /** wf_s_treating -> wf_s_patient_oot -> wf_s_imaging -> wf_s_fusion -> wf_s_couch_move 
+        /** wf_s_treating -> wf_s_patient_oot -> wf_s_imaging -> wf_s_fusion -> wf_s_couch_move
          **        ^-------------------------------------------------------------|
          **/
+        // ------------------------------
         var wf_state = "wf_s_treating";
+        // ------------------------------
+
+        // scene control
+        // --------------
+        var ctrl_gantry_beam_mv_on = true;
+        var ctrl_gantry_speed_default = 10; /* degree/s */
+        var ctrl_gantry_speed = ctrl_gantry_speed_default;
+        var ctrl_camera_on = true;
+        var ctrl_xray_triggerd = false;
+        var ctrl_xray_expose_time_ms = 500;
+        // --------------
 
         // scene objects
         // ----------------
@@ -102,16 +116,6 @@
         var scene_obj_gantry;
         var scene_obj_gantry_beam_mv;
         // ----------------
-
-        // scene control
-        // --------------
-        var ctrl_gantry_beam_mv_on = true;
-        var ctrl_gantry_speed_default = 10; /* degree/s */
-        var ctrl_gantry_speed = ctrl_gantry_speed_default;
-        var ctrl_camera_on = true;
-        var ctrl_xray_triggerd = false;
-        var ctrl_xray_expose_time_ms = 700;
-        // --------------
 
         var clock = new THREE.Clock();
 
@@ -146,12 +150,12 @@
 
             // init obbjects
             {
-                
+
                 {// gantry
                     const scene_obj_gantry_size_x = 700;
                     const scene_obj_gantry_size_y = 300;
                     const scene_obj_gantry_height = 2000;
-                    
+
                     const scene_obj_gantry_arm_size_x = 700;
                     const scene_obj_gantry_arm_size_y = 1000;
                     const scene_obj_gantry_arm_height = 250;
@@ -183,7 +187,7 @@
                 }
                 { // couch and top
                     const scene_obj_couch_height = 900;
-        
+
                     scene_obj_couch = new THREE.Mesh(new THREE.BoxGeometry(450, 500, scene_obj_couch_height),
                         new THREE.MeshLambertMaterial({ color: 0xffb399 }));
                     scene_obj_couch_top = new THREE.Mesh(new THREE.BoxGeometry(500, 1700, 50),
@@ -200,12 +204,12 @@
                     const scene_obj_patient_model = 'model/Homer.reduced.OBJ';
                     const scene_obj_patient_scale = 200;
                     const scene_obj_patient_material = new THREE.MeshPhongMaterial({ color: 0xFED90F, transparent: true, opacity: 0.8, depthWrite: true });
-                   
+
                     scene_obj_patient_tumor = new THREE.Mesh(new THREE.SphereGeometry(10 / scene_obj_patient_scale, 12, 12),
                         new THREE.MeshLambertMaterial({ color: 0x00A886 }));
 
                     var loader = new OBJLoader();
-                    loader.load(scene_obj_patient_model, 
+                    loader.load(scene_obj_patient_model,
                         function ( object ) {
                             scene_obj_patient = object;
                             scene_obj_patient.traverse( function ( child )
@@ -225,14 +229,13 @@
                             scene_obj_patient.visible = true;
                             // XXX: patient is added to couch top system
                             scene_obj_couch_top.add(scene_obj_patient);
-                                            
-                            // QnD: loading page dismiss and switch state
+
+                            // FIXME: QnD: loading page dismiss and switch state
                             {
-                                document.querySelector("#loading").style.display = 'none';
                                 pg_state = 'pg_s_loaded';
                             }
                         },
-                        function ( xhr ) { 
+                        function ( xhr ) {
                             if ( xhr.lengthComputable ) {
                                 var percentComplete = xhr.loaded / xhr.total * 100;
                                 console.log( scene_obj_patient_model + ': ' + Math.round( percentComplete, 2 ) + '% downloaded' );
@@ -270,7 +273,7 @@
 
                     const scene_obj_camera_fov_geometry = new THREE.ConeGeometry(scene_obj_camera_fov_size, scene_obj_camera_fov_length, 32);
                     const scene_obj_camera_fov_material = new THREE.MeshPhongMaterial({ color: 0xf674f6, transparent: true, opacity: 0.1, depthWrite: false });
-                    
+
                     const scene_obj_camera_intra_distance = 450;
 
                     scene_obj_camera = new THREE.Mesh(new THREE.BoxGeometry(scene_obj_camera_intra_distance, 50, 50),
@@ -366,7 +369,7 @@
             scene_controls = new OrbitControls(scene_camera, scene_renderer.domElement);
             scene_controls.enableDamping = true;
             scene_controls.dampingFactor = 0.05;
-            scene_controls.minDistance = 500;
+            scene_controls.minDistance = 200;
             scene_controls.maxDistance = 3200;
             scene_controls.maxPolarAngle = Math.PI / 2;
             scene_controls.maxAzimuthAngle = Math.PI / 1.2;
@@ -394,6 +397,66 @@
 
             scene_obj_xray_fov_1.visible = ctrl_xray_triggerd;
             scene_obj_xray_fov_2.visible = ctrl_xray_triggerd;
+
+            // animate OOT (coughing)
+            if (!ctrl_pg_patient_oot_deviation_rot.equals(new THREE.Vector3(0,0,0))) {
+                const animation_speed_oot_rot_deg_per_ms = 0.05;
+                const step = THREE.Math.degToRad(animation_speed_oot_rot_deg_per_ms * elapsed_ms);
+                var exexute_animate_oot_rot = new THREE.Vector3(0,0,0);
+                {
+                    const pendingX = ctrl_pg_patient_oot_deviation_rot.x;
+                    const stepX = Math.sign(pendingX) * step;
+                    exexute_animate_oot_rot.setX( (pendingX > stepX) ? stepX : pendingX );
+                    ctrl_pg_patient_oot_deviation_rot.setX( (pendingX > stepX) ? (pendingX - stepX) : 0 );
+                }
+                {
+                    const pendingY = ctrl_pg_patient_oot_deviation_rot.y;
+                    const stepY = Math.sign(pendingY) * step;
+                    exexute_animate_oot_rot.setY( (pendingY > stepY) ? stepY : pendingY );
+                    ctrl_pg_patient_oot_deviation_rot.setY( (pendingY > stepY) ? (pendingY - stepY) : 0 );
+                }
+                {
+                    const pendingZ = ctrl_pg_patient_oot_deviation_rot.z;
+                    const stepZ = Math.sign(pendingZ) * step;
+                    exexute_animate_oot_rot.setZ( (pendingZ > stepZ) ? stepZ : pendingZ );
+                    ctrl_pg_patient_oot_deviation_rot.setZ( (pendingZ > stepZ) ? (pendingZ - stepZ) : 0 );
+                }
+                var tf = new THREE.Matrix4();
+                tf.makeRotationFromEuler(new THREE.Euler(exexute_animate_oot_rot.x, exexute_animate_oot_rot.y ,exexute_animate_oot_rot.z,'ZXY'));
+                scene_obj_patient.applyMatrix4(tf);
+            }
+
+            // couch OOT correction
+            if (!ctrl_pg_couch_oot_correct_rot.equals(new THREE.Vector3(0,0,0)) &&
+                wf_state == 'wf_s_couch_move') {
+                const animation_speed_oot_rot_deg_per_ms = 0.01;
+                const step = THREE.Math.degToRad(animation_speed_oot_rot_deg_per_ms * elapsed_ms);
+                var exexute_animate_correct_rot = new THREE.Vector3(0,0,0);
+                {
+                    const pendingX = ctrl_pg_couch_oot_correct_rot.x;
+                    const stepX = Math.sign(pendingX) * step;
+                    exexute_animate_correct_rot.setX( (pendingX > stepX) ? stepX : pendingX );
+                    ctrl_pg_couch_oot_correct_rot.setX( (pendingX > stepX) ? (pendingX - stepX) : 0 );
+                }
+                {
+                    const pendingY = ctrl_pg_couch_oot_correct_rot.y;
+                    const stepY = Math.sign(pendingY) * step;
+                    exexute_animate_correct_rot.setY( (pendingY > stepY) ? stepY : pendingY );
+                    ctrl_pg_couch_oot_correct_rot.setY( (pendingY > stepY) ? (pendingY - stepY) : 0 );
+                }
+                {
+                    const pendingZ = ctrl_pg_couch_oot_correct_rot.z;
+                    const stepZ = Math.sign(pendingZ) * step;
+                    exexute_animate_correct_rot.setZ( (pendingZ > stepZ) ? stepZ : pendingZ );
+                    ctrl_pg_couch_oot_correct_rot.setZ( (pendingZ > stepZ) ? (pendingZ - stepZ) : 0 );
+                }
+                var tf = new THREE.Matrix4();
+                tf.makeRotationFromEuler(new THREE.Euler(exexute_animate_correct_rot.x, exexute_animate_correct_rot.y ,exexute_animate_correct_rot.z,'YXZ'));
+                // FIXME
+                // scene_obj_couch_top.applyMatrix4(tf);
+
+                scene_obj_patient.applyMatrix4(tf);
+            }
         }
 
         // animation/window routines
@@ -413,6 +476,10 @@
 
         function scene_animate() {
             requestAnimationFrame(scene_animate);
+
+            if (pg_state == 'pg_s_loadling') {
+                return;
+            }
 
             var delta = clock.getDelta();
 
@@ -436,6 +503,7 @@
 
         scene_init();
         scene_animate();
+
         // ---
 
         // simple state management
@@ -484,23 +552,16 @@
         b_repos.onmouseup = function()
         {
             if (wf_state == 'wf_s_couch_move') {
+                wf_state = 'wf_s_fusion';
                 b_repos.style.background = b_repos_ready_color;
             }
         }
         b_repos.onmousedown = function()
         {
-            // TODO: move noly when pressed
             if (wf_state == 'wf_s_fusion') {
                 wf_state = 'wf_s_couch_move';
                 b_repos.style.background = b_repos_pressed_color;
             }
-
-            setTimeout(function() {
-                if (wf_state == 'wf_s_couch_move') {
-                    ctrl_pg_patient_last_repos_timestamp_ms = Date.now(); 
-                    wf_state = 'wf_s_treating';
-                }
-            }, 3000); // FIXME
         };
         var text_ok = function() {
             statusbar.innerHTML = "Patient position is OK. You may take Xray images to verify patient position at any time.";
@@ -513,10 +574,12 @@
             warning_sign.style.backgroundColor = '#EE2375';
         }
         var text_couch_move = function() {
-            statusbar.innerHTML = "Please hold the couch control to reposition patient.";
+            // FIXME statusbar.innerHTML = "Please hold the couch control to reposition patient.";
+            statusbar.innerHTML = "Please poke the patient back to the right position.";
         }
         setInterval(function () {
             if (pg_state == 'pg_s_loaded') {
+                document.querySelector("#loading").style.display = 'none';
                 pg_state = 'pg_s_preview';
 
                 text_ok();
@@ -527,7 +590,7 @@
             }
             else if (pg_state == 'pg_s_interactive') {
                 var patient_image = document.getElementById("patient_profile");
-                
+
                 if (wf_state == 'wf_s_treating') {
 
                     text_ok();
@@ -544,12 +607,22 @@
                     // randomly trigger OOT
                     if (Math.random() < ctrl_pg_patient_oot_rate &&
                         Date.now() - ctrl_pg_patient_last_repos_timestamp_ms > ctrl_pg_patient_oot_after_repos_at_least_ms &&
-                        Date.now() - ctrl_pg_patient_last_xray_timestamp_ms > ctrl_pg_patient_oot_after_xray_at_least_ms) {                        
-
-                        ctrl_pg_patient_oot_deviation = new THREE.Matrix4();
-                        ctrl_pg_patient_oot_deviation.makeTranslation(Math.random()*30,Math.random()*30,Math.random()*30);
+                        Date.now() - ctrl_pg_patient_last_xray_timestamp_ms > ctrl_pg_patient_oot_after_xray_at_least_ms) {
 
                         wf_state = 'wf_s_patient_oot';
+
+                        // generate a new OOT deviation
+                        const oot_rot_max_deg = 5;
+                        ctrl_pg_patient_oot_deviation_rot = new THREE.Vector3(
+                            THREE.Math.degToRad( (2*Math.random()-1)*oot_rot_max_deg ),
+                            THREE.Math.degToRad( (2*Math.random()-1)*oot_rot_max_deg ),
+                            THREE.Math.degToRad( (2*Math.random()-1)*oot_rot_max_deg ));
+                        ctrl_pg_patient_oot_deviation_trans = new THREE.Vector3(0, 0, 0);
+                        // generate inversed couch correction
+                        ctrl_pg_couch_oot_correct_rot = ctrl_pg_patient_oot_deviation_rot.clone();
+                        ctrl_pg_couch_oot_correct_rot.multiplyScalar(-1);
+                        ctrl_pg_couch_oot_correct_trans = ctrl_pg_patient_oot_deviation_trans.clone();
+                        ctrl_pg_couch_oot_correct_trans.multiplyScalar(-1);
 
                         patient_image.classList.add('effect_shake');
                         patient_image.src = "model/homer-profile-coughing.jpg";
@@ -561,7 +634,10 @@
                     }
                 }
                 else if (wf_state == 'wf_s_couch_move') {
-                    //b_repos.disabled = true;
+                    if (ctrl_pg_couch_oot_correct_rot.equals(new THREE.Vector3(0,0,0))) {
+                        ctrl_pg_patient_last_repos_timestamp_ms = Date.now();
+                        wf_state = 'wf_s_treating';
+                    }
                 }
                 else if (wf_state == 'wf_s_fusion') {
                     b_repos.disabled = false;
