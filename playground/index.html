@@ -66,10 +66,10 @@
         const ctrl_pg_patient_oot_after_xray_at_least_ms = 5000; /* [just for smoothy demo] we trigger oot not immediately after xrays */
         var ctrl_pg_patient_last_repos_timestamp_ms = Date.now();
         var ctrl_pg_patient_last_xray_timestamp_ms = Date.now();
-        var ctrl_pg_patient_oot_deviation_rot = new THREE.Vector3();
-        var ctrl_pg_patient_oot_deviation_trans = new THREE.Vector3();
-        var ctrl_pg_couch_oot_correct_rot = new THREE.Vector3();
-        var ctrl_pg_couch_oot_correct_trans = new THREE.Vector3();
+        var ctrl_pg_patient_deviation_rot = new THREE.Vector3();
+        var ctrl_pg_patient_deviation_trans = new THREE.Vector3();
+        var ctrl_pg_couch_correct_rot = new THREE.Vector3();
+        var ctrl_pg_couch_correct_trans = new THREE.Vector3();
         // ----------
 
         /** wf_s_treating -> wf_s_patient_oot -> wf_s_imaging -> wf_s_fusion -> wf_s_couch_move
@@ -399,62 +399,78 @@
             scene_obj_xray_fov_2.visible = ctrl_xray_triggerd;
 
             // animate OOT (coughing)
-            if (!ctrl_pg_patient_oot_deviation_rot.equals(new THREE.Vector3(0,0,0))) {
-                const animation_speed_oot_rot_deg_per_ms = 0.05;
-                const step = THREE.Math.degToRad(animation_speed_oot_rot_deg_per_ms * elapsed_ms);
-                var exexute_animate_oot_rot = new THREE.Vector3(0,0,0);
-                {
-                    const pendingX = ctrl_pg_patient_oot_deviation_rot.x;
-                    const stepX = Math.sign(pendingX) * step;
-                    exexute_animate_oot_rot.setX( (pendingX > stepX) ? stepX : pendingX );
-                    ctrl_pg_patient_oot_deviation_rot.setX( (pendingX > stepX) ? (pendingX - stepX) : 0 );
+            // Euler Rotation: RX > RY > RZ
+            if (!ctrl_pg_patient_deviation_rot.equals(new THREE.Vector3(0,0,0))) {
+                const animation_speed_deviation_rot_deg_per_ms = 0.1;
+                const step = THREE.Math.degToRad(animation_speed_deviation_rot_deg_per_ms * elapsed_ms);
+                var exexute_animate_deviation_rot = new THREE.Vector3(0,0,0);
+
+                const pendingX = ctrl_pg_patient_deviation_rot.x;
+                const stepX = Math.sign(pendingX) * step;
+                const animateX = (Math.abs(pendingX) > step) ? stepX : pendingX;
+                exexute_animate_deviation_rot.setX(animateX);
+                if (exexute_animate_deviation_rot.x != 0) {
+                    ctrl_pg_patient_deviation_rot.setX(pendingX - animateX);
                 }
-                {
-                    const pendingY = ctrl_pg_patient_oot_deviation_rot.y;
+                else {
+                    const pendingY = ctrl_pg_patient_deviation_rot.y;
                     const stepY = Math.sign(pendingY) * step;
-                    exexute_animate_oot_rot.setY( (pendingY > stepY) ? stepY : pendingY );
-                    ctrl_pg_patient_oot_deviation_rot.setY( (pendingY > stepY) ? (pendingY - stepY) : 0 );
-                }
-                {
-                    const pendingZ = ctrl_pg_patient_oot_deviation_rot.z;
-                    const stepZ = Math.sign(pendingZ) * step;
-                    exexute_animate_oot_rot.setZ( (pendingZ > stepZ) ? stepZ : pendingZ );
-                    ctrl_pg_patient_oot_deviation_rot.setZ( (pendingZ > stepZ) ? (pendingZ - stepZ) : 0 );
+                    const animateY = (Math.abs(pendingY) > step) ? stepY : pendingY;
+                    exexute_animate_deviation_rot.setY(animateY);
+                    if (exexute_animate_deviation_rot.y != 0) {
+                        ctrl_pg_patient_deviation_rot.setY(pendingY - animateY);
+                    }
+                    else {
+                        const pendingZ = ctrl_pg_patient_deviation_rot.z;
+                        const stepZ = Math.sign(pendingZ) * step;
+                        const animateZ = (Math.abs(pendingZ) > step) ? stepZ : pendingZ;
+                        exexute_animate_deviation_rot.setZ(animateZ);
+                        if (exexute_animate_deviation_rot.z != 0) {
+                            ctrl_pg_patient_deviation_rot.setZ(pendingZ - animateZ);
+                        }
+                    }
                 }
                 var tf = new THREE.Matrix4();
-                tf.makeRotationFromEuler(new THREE.Euler(exexute_animate_oot_rot.x, exexute_animate_oot_rot.y ,exexute_animate_oot_rot.z,'ZXY'));
+                tf.makeRotationFromEuler(new THREE.Euler(exexute_animate_deviation_rot.x, exexute_animate_deviation_rot.y ,exexute_animate_deviation_rot.z));
                 scene_obj_patient.applyMatrix4(tf);
             }
 
-            // couch OOT correction
-            if (!ctrl_pg_couch_oot_correct_rot.equals(new THREE.Vector3(0,0,0)) &&
-                wf_state == 'wf_s_couch_move') {
-                const animation_speed_oot_rot_deg_per_ms = 0.01;
-                const step = THREE.Math.degToRad(animation_speed_oot_rot_deg_per_ms * elapsed_ms);
+            // FIXME: we move patient at the moment, not couch
+            // couch correction
+            // Euler Rotation: RZ > RY > RX
+            if (wf_state == 'wf_s_couch_move' &&
+                !ctrl_pg_couch_correct_rot.equals(new THREE.Vector3(0,0,0))) {
+                const animation_speed_correct_rot_deg_per_ms = 0.01;
+                const step = THREE.Math.degToRad(animation_speed_correct_rot_deg_per_ms * elapsed_ms);
                 var exexute_animate_correct_rot = new THREE.Vector3(0,0,0);
-                {
-                    const pendingX = ctrl_pg_couch_oot_correct_rot.x;
-                    const stepX = Math.sign(pendingX) * step;
-                    exexute_animate_correct_rot.setX( (pendingX > stepX) ? stepX : pendingX );
-                    ctrl_pg_couch_oot_correct_rot.setX( (pendingX > stepX) ? (pendingX - stepX) : 0 );
+
+                const pendingZ = ctrl_pg_couch_correct_rot.z;
+                const stepZ = Math.sign(pendingZ) * step;
+                const animateZ = (Math.abs(pendingZ) > step) ? stepZ : pendingZ;
+                exexute_animate_correct_rot.setZ(animateZ);
+                if (exexute_animate_correct_rot.z != 0) {
+                    ctrl_pg_couch_correct_rot.setZ(pendingZ - animateZ);
                 }
-                {
-                    const pendingY = ctrl_pg_couch_oot_correct_rot.y;
+                else {
+                    const pendingY = ctrl_pg_couch_correct_rot.y;
                     const stepY = Math.sign(pendingY) * step;
-                    exexute_animate_correct_rot.setY( (pendingY > stepY) ? stepY : pendingY );
-                    ctrl_pg_couch_oot_correct_rot.setY( (pendingY > stepY) ? (pendingY - stepY) : 0 );
-                }
-                {
-                    const pendingZ = ctrl_pg_couch_oot_correct_rot.z;
-                    const stepZ = Math.sign(pendingZ) * step;
-                    exexute_animate_correct_rot.setZ( (pendingZ > stepZ) ? stepZ : pendingZ );
-                    ctrl_pg_couch_oot_correct_rot.setZ( (pendingZ > stepZ) ? (pendingZ - stepZ) : 0 );
+                    const animateY = (Math.abs(pendingY) > step) ? stepY : pendingY;
+                    exexute_animate_correct_rot.setY(animateY);
+                    if (exexute_animate_correct_rot.y != 0) {
+                        ctrl_pg_couch_correct_rot.setY(pendingY - animateY);
+                    }
+                    else {
+                        const pendingX = ctrl_pg_couch_correct_rot.x;
+                        const stepX = Math.sign(pendingX) * step;
+                        const animateX = (Math.abs(pendingX) > step) ? stepX : pendingX;
+                        exexute_animate_correct_rot.setX(animateX);
+                        if (exexute_animate_correct_rot.x != 0) {
+                            ctrl_pg_couch_correct_rot.setX(pendingX - animateX);
+                        }
+                    }
                 }
                 var tf = new THREE.Matrix4();
-                tf.makeRotationFromEuler(new THREE.Euler(exexute_animate_correct_rot.x, exexute_animate_correct_rot.y ,exexute_animate_correct_rot.z,'YXZ'));
-                // FIXME
-                // scene_obj_couch_top.applyMatrix4(tf);
-
+                tf.makeRotationFromEuler(new THREE.Euler(exexute_animate_correct_rot.x, exexute_animate_correct_rot.y ,exexute_animate_correct_rot.z));
                 scene_obj_patient.applyMatrix4(tf);
             }
         }
@@ -535,6 +551,7 @@
 
             if (wf_state == 'wf_s_patient_oot') {
                 wf_state = 'wf_s_imaging';
+                console.log(wf_state);
             }
 
             setTimeout(function() {
@@ -546,6 +563,7 @@
 
                 if (wf_state == 'wf_s_imaging') {
                     wf_state = 'wf_s_fusion';
+                    console.log(wf_state);
                 }
             }, ctrl_xray_expose_time_ms);
         };
@@ -553,6 +571,7 @@
         {
             if (wf_state == 'wf_s_couch_move') {
                 wf_state = 'wf_s_fusion';
+                console.log(wf_state);
                 b_repos.style.background = b_repos_ready_color;
             }
         }
@@ -560,6 +579,7 @@
         {
             if (wf_state == 'wf_s_fusion') {
                 wf_state = 'wf_s_couch_move';
+                console.log(wf_state);
                 b_repos.style.background = b_repos_pressed_color;
             }
         };
@@ -610,19 +630,20 @@
                         Date.now() - ctrl_pg_patient_last_xray_timestamp_ms > ctrl_pg_patient_oot_after_xray_at_least_ms) {
 
                         wf_state = 'wf_s_patient_oot';
+                        console.log(wf_state);
 
                         // generate a new OOT deviation
                         const oot_rot_max_deg = 5;
-                        ctrl_pg_patient_oot_deviation_rot = new THREE.Vector3(
+                        ctrl_pg_patient_deviation_rot = new THREE.Vector3(
                             THREE.Math.degToRad( (2*Math.random()-1)*oot_rot_max_deg ),
                             THREE.Math.degToRad( (2*Math.random()-1)*oot_rot_max_deg ),
                             THREE.Math.degToRad( (2*Math.random()-1)*oot_rot_max_deg ));
-                        ctrl_pg_patient_oot_deviation_trans = new THREE.Vector3(0, 0, 0);
+                        ctrl_pg_patient_deviation_trans = new THREE.Vector3(0, 0, 0);
                         // generate inversed couch correction
-                        ctrl_pg_couch_oot_correct_rot = ctrl_pg_patient_oot_deviation_rot.clone();
-                        ctrl_pg_couch_oot_correct_rot.multiplyScalar(-1);
-                        ctrl_pg_couch_oot_correct_trans = ctrl_pg_patient_oot_deviation_trans.clone();
-                        ctrl_pg_couch_oot_correct_trans.multiplyScalar(-1);
+                        ctrl_pg_couch_correct_rot = ctrl_pg_patient_deviation_rot.clone();
+                        ctrl_pg_couch_correct_rot.multiplyScalar(-1);
+                        ctrl_pg_couch_correct_trans = ctrl_pg_patient_deviation_trans.clone();
+                        ctrl_pg_couch_correct_trans.multiplyScalar(-1);
 
                         patient_image.classList.add('effect_shake');
                         patient_image.src = "model/homer-profile-coughing.jpg";
@@ -634,9 +655,10 @@
                     }
                 }
                 else if (wf_state == 'wf_s_couch_move') {
-                    if (ctrl_pg_couch_oot_correct_rot.equals(new THREE.Vector3(0,0,0))) {
+                    if (ctrl_pg_couch_correct_rot.equals(new THREE.Vector3(0,0,0))) {
                         ctrl_pg_patient_last_repos_timestamp_ms = Date.now();
                         wf_state = 'wf_s_treating';
+                        console.log(wf_state);
                     }
                 }
                 else if (wf_state == 'wf_s_fusion') {
