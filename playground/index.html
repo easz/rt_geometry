@@ -62,7 +62,7 @@
         const ctrl_pg_preview_duration_ms = 5 * 1000; // use bigger value to let delay oot trigger
         const ctrl_pg_state_transition_interval_ms = 500; // the interval polling frequency of evaluating state transition
         const ctrl_pg_patient_oot_rate = 0.1; /* out-of-toelrance probability (evaluated per ctrl_pg_state_transition_interval_ms) */
-        const ctrl_pg_patient_oot_after_repos_at_least_ms = 5000; /* [just for smoothy demo] we trigger oot not immediately after a repos */
+        const ctrl_pg_patient_oot_after_repos_at_least_ms = 10000; /* [just for smoothy demo] we trigger oot not immediately after a repos */
         const ctrl_pg_patient_oot_after_xray_at_least_ms = 5000; /* [just for smoothy demo] we trigger oot not immediately after xrays */
         var ctrl_pg_patient_last_repos_timestamp_ms = Date.now();
         var ctrl_pg_patient_last_xray_timestamp_ms = Date.now();
@@ -224,10 +224,9 @@
                             scene_obj_patient.add(scene_obj_patient_tumor);
 
                             scene_obj_patient.scale.set(scene_obj_patient_scale, scene_obj_patient_scale, scene_obj_patient_scale);
-                            // XXX: kind of default prepos
-                            scene_obj_patient.position.set(0, 50, 150); // FIXME: hardcoded
+                            scene_obj_patient.position.set(0, 50, 150); // XXX: hardcoded default prepos so that the patient is at isocenter
                             scene_obj_patient.visible = true;
-                            // XXX: patient is added to couch top system
+                            // XXX: patient is added to couch top system which is already added to the scene
                             scene_obj_couch_top.add(scene_obj_patient);
 
                             // FIXME: QnD: loading page dismiss and switch state
