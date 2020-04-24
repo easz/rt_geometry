@@ -205,9 +205,6 @@
                     const scene_obj_patient_scale = 200;
                     const scene_obj_patient_material = new THREE.MeshPhongMaterial({ color: 0xFED90F, transparent: true, opacity: 0.8, depthWrite: true });
 
-                    scene_obj_patient_tumor = new THREE.Mesh(new THREE.SphereGeometry(10 / scene_obj_patient_scale, 12, 12),
-                        new THREE.MeshLambertMaterial({ color: 0x00A886 }));
-
                     var loader = new OBJLoader();
                     loader.load(scene_obj_patient_model,
                         function ( object ) {
@@ -219,17 +216,22 @@
                                 }
                             });
 
-                            // tumor
-                            scene_obj_patient_tumor.position.set(0, 2.25, 0); // FIXME: hardcoded
+                            // patient tumor (its precise position at isocenter will be calculated later)
+                            scene_obj_patient_tumor = new THREE.Mesh(new THREE.SphereGeometry(10 / scene_obj_patient_scale, 12, 12),
+                                                                     new THREE.MeshLambertMaterial({ color: 0x00A886 }));
                             scene_obj_patient.add(scene_obj_patient_tumor);
 
                             scene_obj_patient.scale.set(scene_obj_patient_scale, scene_obj_patient_scale, scene_obj_patient_scale);
                             scene_obj_patient.position.set(0, 50, 150); // XXX: hardcoded default prepos so that the patient is at isocenter
-                            scene_obj_patient.visible = true;
-                            // XXX: patient is added to couch top system which is already added to the scene
+                            // XXX: Make sure all scene pbject is added (tumor -> patient -> couch top -> couch -> scene)
                             scene_obj_couch_top.add(scene_obj_patient);
+                            // force re-compute all matrix from scene
+                            scene_obj_patient_tumor.updateWorldMatrix(true, true);
+                            // compute translation so that the tumor will be located at origin in world
+                            var local = scene_obj_patient_tumor.worldToLocal(new THREE.Vector3(0,0,0));
+                            scene_obj_patient_tumor.position.set(local.x, local.y, local.z);
 
-                            // FIXME: QnD: loading page dismiss and switch state
+                            // FIXME: take also other loading procedures into consideration?
                             {
                                 pg_state = 'pg_s_loaded';
                             }
