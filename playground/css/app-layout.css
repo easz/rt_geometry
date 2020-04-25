@@ -109,9 +109,9 @@
 
     grid-row: 3;
 
-    background: #C9C7C7;
+    background: black;
     margin: 10px 20px 10px 0px;
-    border: 1px solid darkslategray;
+    display: block;
 }
 
 #warning_sign {

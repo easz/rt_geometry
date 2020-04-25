@@ -33,7 +33,7 @@
                 </div>
                 <div id="xray_readout">TODO</div>
                 <div id="cam_readout">TODO</div>
-                <div id="cam_img">TODO</div>
+                <div id="cam_img"></div>
                 <div id="linac_sign">TODO</div>
                 <div id="timeline">TODO</div>
                 <div id="warning_sign"></div>
@@ -95,7 +95,7 @@
         var scene_camera;
         var scene_controls; /* e.g. mouse */
         var scene_renderer;
-        const scene_renderer_fps = 60;              /* animation fps */
+        const scene_renderer_fps = 40;              /* animation fps */
         var scene_renderer_timestamp_ms = Date.now();  /* the last time when the scene is rendered */
         const scene_background = 0xfbfbfb;
 
@@ -117,7 +117,82 @@
         var scene_obj_gantry_beam_mv;
         // ----------------
 
-        var clock = new THREE.Clock();
+        // surface point cloud
+        // --------------------
+        var pc_scene;
+        var pc_scene_camera;
+        var pc_scene_renderer;
+        var pc_scene_controls;
+        var pc_scene_point_cloud; // THREE.GROUP: hold points from 'point_cloud_points'
+
+        const point_cloud_scan_from_x = -100;
+        const point_cloud_scan_to_x   = 100;
+        const point_cloud_scan_from_y = -200;
+        const point_cloud_scan_to_y   = 150;
+        const point_cloud_w = 15;
+        const point_cloud_h = 20;
+        var point_cloud_points; // array of THREE.GeometryMesh shapes
+
+        const scene_raycaster_from = new THREE.Vector3(0, -1000, 1000); // where in scene camera is
+        var raycaster = new THREE.Raycaster(scene_raycaster_from, new THREE.Vector3(), 100, scene_raycaster_from.length());
+        var pc_scene_animation_clock = new THREE.Clock();
+        const rays_per_ms = 0.1; // XXX: !!! use small value since raycasting on CPU extremely slow
+        var scene_raycaster_done = 0; // how many rays are already done
+        // --------------------
+
+        function pc_scene_init() {
+            // DOM: where to append the scene
+            var container = document.getElementById('cam_img');
+            const container_width = container.clientWidth;
+            const container_height = container.clientHeight;
+
+            // init camera
+            pc_scene_camera = new THREE.PerspectiveCamera(16, container_width / container_height, 1, 3000);
+            //pc_scene_camera = new THREE.OrthographicCamera(container_width / -2, container_height / 2, container_height / 2, container_width / -2, 1, 7000);
+            pc_scene_camera.position.set(0, -1000, 1000);
+            pc_scene_camera.up.set(0, 0, 1);
+            pc_scene_camera.lookAt(new THREE.Vector3(0, 0, 0));
+
+            // init scene
+            pc_scene = new THREE.Scene();
+
+            // init renderer
+            pc_scene_renderer = new THREE.WebGLRenderer({ antialias: true }); // WebGLRenderer CanvasRenderer
+            pc_scene_renderer.setClearColor('black');
+            pc_scene_renderer.setPixelRatio(window.devicePixelRatio);
+            pc_scene_renderer.setSize(container_width, container_height);
+
+            // add point clouds
+            pc_scene_point_cloud = new THREE.Group();
+            point_cloud_points = new Array(point_cloud_w * point_cloud_h);
+            for (var i = 0, len = point_cloud_points.length; i < len; i++) {
+                var point = new THREE.Mesh(
+                    new THREE.SphereGeometry(3, 4, 4),
+                    new THREE.MeshBasicMaterial());
+                    point_cloud_points[i] = point; // added to array
+                pc_scene_point_cloud.add(point); // aded to scene
+            }
+            pc_scene.add(pc_scene_point_cloud);
+
+            // init control
+            pc_scene_controls = new OrbitControls(pc_scene_camera, pc_scene_renderer.domElement);
+            pc_scene_controls.target = new THREE.Vector3(0, -50, 0);
+            pc_scene_controls.enablePan = true;
+            pc_scene_controls.enableDamping = true;
+            pc_scene_controls.dampingFactor = 0.05;
+            pc_scene_controls.minDistance = 50;
+            pc_scene_controls.maxDistance = 3000;
+            pc_scene_controls.maxPolarAngle = Math.PI / 5;
+            pc_scene_controls.maxAzimuthAngle = Math.PI / 4;
+            pc_scene_controls.minAzimuthAngle = -Math.PI / 4;
+
+            pc_scene_controls.panSpeed = 0.8;
+            pc_scene_controls.rotateSpeed = 0.7;
+            pc_scene_controls.zoomSpeed = 0.2;
+
+            // append to DOM
+            container.appendChild(pc_scene_renderer.domElement);
+        }
 
         function scene_init() {
             // DOM: where to append the scene
@@ -223,11 +298,13 @@
 
                             scene_obj_patient.scale.set(scene_obj_patient_scale, scene_obj_patient_scale, scene_obj_patient_scale);
                             scene_obj_patient.position.set(0, 50, 150); // XXX: hardcoded default prepos so that the patient is at isocenter
-                            // XXX: Make sure all scene pbject is added (tumor -> patient -> couch top -> couch -> scene)
+                            // XXX: Make sure all relevant objects now are added to scene
+                            // to calculate tumor initial position.
+                            // (tumor -> patient -> couch top -> couch -> scene)
                             scene_obj_couch_top.add(scene_obj_patient);
-                            // force re-compute all matrix from scene
+                            // force re-compute all matrix from scene to tumor
                             scene_obj_patient_tumor.updateWorldMatrix(true, true);
-                            // compute translation so that the tumor will be located at origin in world
+                            // compute transformation now so that the tumor will be located at origin in world
                             var local = scene_obj_patient_tumor.worldToLocal(new THREE.Vector3(0,0,0));
                             scene_obj_patient_tumor.position.set(local.x, local.y, local.z);
 
@@ -382,8 +459,6 @@
 
             // append to DOM
             container.appendChild(scene_renderer.domElement);
-
-            window.addEventListener('resize', onWindowResize, false);
         }
 
         function scene_animation_update( elapsed_ms ) {
@@ -476,19 +551,62 @@
             }
         }
 
-        // animation/window routines
-        function onWindowResize() {
-            var container = document.getElementById('scene');
-            var container_width = container.clientWidth;
-            var container_height = container.clientHeight;
+        function pc_scene_animation_update( elapsed_ms ) {
+            const nr_of_ray = parseInt(elapsed_ms * rays_per_ms, 10);
+            for (var idx = scene_raycaster_done;
+                 idx < scene_raycaster_done + nr_of_ray && idx < point_cloud_w * point_cloud_h;
+                 idx++) {
+                const w = idx % point_cloud_w;
+                const h = (idx - w) / point_cloud_w;
+                const dir_x = point_cloud_scan_from_x + w * (point_cloud_scan_to_x - point_cloud_scan_from_x) / (point_cloud_w - 1);
+                const dir_y = point_cloud_scan_from_y + h * (point_cloud_scan_to_y - point_cloud_scan_from_y) / (point_cloud_h - 1);
+                const scene_raycaster_dir = new THREE.Vector3(dir_x, dir_y, 0).sub(scene_raycaster_from).normalize();
+                raycaster.set(scene_raycaster_from, scene_raycaster_dir);
+                const intersects = raycaster.intersectObject(scene_obj_patient, true);
+                if ( intersects.length > 0 ) {
+                    point_cloud_points[idx].visible = true;
+                    point_cloud_points[idx].position.set(
+                        intersects[0].point.x + 5 * (Math.random() - 0.5),
+                        intersects[0].point.y + 5 * (Math.random() - 0.5),
+                        intersects[0].point.z + 5 * (Math.random() - 0.5)
+                    );
+                }
+                else
+                {
+                    point_cloud_points[idx].visible = false;
+                }
+            }
+            const done = Math.min(nr_of_ray, point_cloud_w * point_cloud_h - scene_raycaster_done);
+            scene_raycaster_done = (scene_raycaster_done + done) % (point_cloud_w * point_cloud_h);
+        }
 
-            scene_camera.aspect = container_width / container_height;
-            scene_camera.updateProjectionMatrix();
-            scene_renderer.setSize(container_width, container_height);
+        function onWindowResize() {
+            {
+                var container = document.getElementById('scene');
+                var container_width = container.clientWidth;
+                var container_height = container.clientHeight;
+
+                scene_camera.aspect = container_width / container_height;
+                scene_camera.updateProjectionMatrix();
+                scene_renderer.setSize(container_width, container_height);
+            }
+            {
+                var container = document.getElementById('cam_img');
+                var container_width = container.clientWidth;
+                var container_height = container.clientHeight;
+
+                pc_scene_camera.aspect = container_width / container_height;
+                pc_scene_camera.updateProjectionMatrix();
+                pc_scene_renderer.setSize(container_width, container_height);
+            }
         }
 
         function scene_render() {
             scene_renderer.render(scene, scene_camera);
+        }
+
+        function pc_scene_render() {
+            pc_scene_renderer.render(pc_scene, pc_scene_camera);
         }
 
         function scene_animate() {
@@ -498,15 +616,13 @@
                 return;
             }
 
-            var delta = clock.getDelta();
-
             scene_controls.update(); // only required if controls.enableDamping = true, or if controls.autoRotate = true
 
             // do animation under the specific max fps
-            var now = Date.now();
-            var elapsed_ms = now - scene_renderer_timestamp_ms;
-            var interval_ms = 1000 / scene_renderer_fps;
-            if (elapsed_ms > interval_ms) {
+            const now = Date.now();
+            const elapsed_ms = now - scene_renderer_timestamp_ms;
+            const interval_ms = 1000 / scene_renderer_fps;
+            if (elapsed_ms >= interval_ms) {
                 scene_renderer_timestamp_ms = now - (elapsed_ms % interval_ms);
             }
             else {
@@ -514,13 +630,30 @@
             }
 
             scene_animation_update( elapsed_ms );
-
             scene_render();
         }
 
-        scene_init();
-        scene_animate();
+        function pc_scene_animate() {
+            requestAnimationFrame(pc_scene_animate);
 
+            if (pg_state == 'pg_s_loadling') {
+                return;
+            }
+
+            const elapsed_s = pc_scene_animation_clock.getDelta();
+            pc_scene_controls.update(); // only required if controls.enableDamping = true, or if controls.autoRotate = true
+
+            pc_scene_animation_update( elapsed_s * 1000 );
+            pc_scene_render();
+        }
+
+        scene_init();
+        pc_scene_init();
+
+        scene_animate();
+        pc_scene_animate();
+
+        window.addEventListener('resize', onWindowResize, false);
         // ---
 
         // simple state management
