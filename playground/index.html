@@ -54,6 +54,7 @@
         import * as THREE from './js/three.js-r115/build/three.module.js';
         import { OrbitControls } from './js/three.js-r115/examples/jsm/controls/OrbitControls.js';
         import { OBJLoader } from './js/three.js-r115/examples/jsm/loaders/OBJLoader.js';
+        //import Stats from './js/three.js-r115/examples/jsm/libs/stats.module.js';
 
         // Playground
         // ----------
@@ -92,11 +93,14 @@
         // scene objects
         // ----------------
         var scene;
+        //var scene_stats;
         var scene_camera;
         var scene_controls; /* e.g. mouse */
         var scene_renderer;
-        const scene_renderer_fps = 40;              /* animation fps */
-        var scene_renderer_timestamp_ms = Date.now();  /* the last time when the scene is rendered */
+        const scene_renderer_max_fps = 40;             /* desired max. animation fps */
+        const scene_renderer_min_fps = 25;             /* desired min. animation fps */
+        var scene_animation_clock = new THREE.Clock();
+        var scene_renderer_elapsed_ms = 0;  /* the elapsed time since the last scene is rendered */
         const scene_background = 0xfbfbfb;
 
         var scene_obj_couch;
@@ -115,9 +119,14 @@
         var scene_obj_xray_fov_2;
         var scene_obj_gantry;
         var scene_obj_gantry_beam_mv;
+
+        const scene_raycaster_from = new THREE.Vector3(0, -1000, 1000); // where in scene camera is
+        var raycaster = new THREE.Raycaster(scene_raycaster_from, new THREE.Vector3(), 100, scene_raycaster_from.length());
+        var rays_nr_per_ms; // XXX: estmated raycasting speed
+        var scene_raycaster_done = 0; // how many rays are already done
         // ----------------
 
-        // surface point cloud
+        // surface point cloud scene
         // --------------------
         var pc_scene;
         var pc_scene_camera;
@@ -125,19 +134,13 @@
         var pc_scene_controls;
         var pc_scene_point_cloud; // THREE.GROUP: hold points from 'point_cloud_points'
 
-        const point_cloud_scan_from_x = -100;
-        const point_cloud_scan_to_x   = 100;
+        const point_cloud_scan_from_x = -150;
+        const point_cloud_scan_to_x   = 150;
         const point_cloud_scan_from_y = -200;
         const point_cloud_scan_to_y   = 150;
-        const point_cloud_w = 15;
-        const point_cloud_h = 20;
+        const point_cloud_w = 20;
+        const point_cloud_h = 30;
         var point_cloud_points; // array of THREE.GeometryMesh shapes
-
-        const scene_raycaster_from = new THREE.Vector3(0, -1000, 1000); // where in scene camera is
-        var raycaster = new THREE.Raycaster(scene_raycaster_from, new THREE.Vector3(), 100, scene_raycaster_from.length());
-        var pc_scene_animation_clock = new THREE.Clock();
-        const rays_per_ms = 0.1; // XXX: !!! use small value since raycasting on CPU extremely slow
-        var scene_raycaster_done = 0; // how many rays are already done
         // --------------------
 
         function pc_scene_init() {
@@ -308,6 +311,24 @@
                             var local = scene_obj_patient_tumor.worldToLocal(new THREE.Vector3(0,0,0));
                             scene_obj_patient_tumor.position.set(local.x, local.y, local.z);
 
+                            // XXX: just make a guess of raycasting speed
+                            // make sure scene_obj_patient world matrix is updated properly
+                            scene_obj_patient.updateMatrixWorld(false);
+                            {
+                                var clock = new THREE.Clock();
+                                clock.start();
+                                const probes = 5;
+                                for (var tries=0; tries<probes; tries++) {
+                                    const scene_raycaster_dir = new THREE.Vector3(0, 0, 0).sub(scene_raycaster_from).normalize();
+                                    raycaster.set(scene_raycaster_from, scene_raycaster_dir);
+                                    raycaster.intersectObject(scene_obj_patient, true);
+                                }
+                                var delta_ms = clock.getDelta()*1000 / probes;
+                                rays_nr_per_ms = 10*(1/delta_ms)/6; // empirical guess...
+                                console.log("average raycast time: ", delta_ms, ". default rays_nr_per_ms: ", rays_nr_per_ms);
+                                clock.stop();
+                            }
+
                             // FIXME: take also other loading procedures into consideration?
                             {
                                 pg_state = 'pg_s_loaded';
@@ -459,6 +480,9 @@
 
             // append to DOM
             container.appendChild(scene_renderer.domElement);
+
+            //scene_stats = new Stats();
+			//container.appendChild( scene_stats.dom );
         }
 
         function scene_animation_update( elapsed_ms ) {
@@ -551,10 +575,31 @@
             }
         }
 
-        function pc_scene_animation_update( elapsed_ms ) {
-            const nr_of_ray = parseInt(elapsed_ms * rays_per_ms, 10);
+        function scene_ray_cast( elapsed_ms ) {
+            // XXX: QnD adapt rays_nr_per_ms according to estimated fps dynamically
+            const estimated_fps = 1000 / elapsed_ms;
+            if (elapsed_ms != 0) {
+                if (estimated_fps <= scene_renderer_min_fps) {
+                    rays_nr_per_ms *= 0.9;
+                }
+                else if (estimated_fps <= (scene_renderer_max_fps+scene_renderer_min_fps)/2) {
+                    rays_nr_per_ms *= 1.15;
+                }
+                else {
+                    rays_nr_per_ms *= 1.01;
+                }
+            }
+
+            // nr_of_ray: the total rays to cast in this round
+            const count = (elapsed_ms == 0) ? 0 : Math.min(
+                parseInt(elapsed_ms * rays_nr_per_ms, 10),
+                point_cloud_w * point_cloud_h - scene_raycaster_done
+            );
+
+            //console.log(estimated_fps, rays_nr_per_ms, count);
+
             for (var idx = scene_raycaster_done;
-                 idx < scene_raycaster_done + nr_of_ray && idx < point_cloud_w * point_cloud_h;
+                 idx < scene_raycaster_done + count;
                  idx++) {
                 const w = idx % point_cloud_w;
                 const h = (idx - w) / point_cloud_w;
@@ -565,10 +610,10 @@
                 const intersects = raycaster.intersectObject(scene_obj_patient, true);
                 if ( intersects.length > 0 ) {
                     point_cloud_points[idx].visible = true;
-                    point_cloud_points[idx].position.set(
-                        intersects[0].point.x + 5 * (Math.random() - 0.5),
-                        intersects[0].point.y + 5 * (Math.random() - 0.5),
-                        intersects[0].point.z + 5 * (Math.random() - 0.5)
+                    point_cloud_points[idx].position.set( // use a bit random to simulate noise
+                        intersects[0].point.x + 3 * (Math.random() - 0.5),
+                        intersects[0].point.y + 3 * (Math.random() - 0.5),
+                        intersects[0].point.z + 3 * (Math.random() - 0.5)
                     );
                 }
                 else
@@ -576,8 +621,8 @@
                     point_cloud_points[idx].visible = false;
                 }
             }
-            const done = Math.min(nr_of_ray, point_cloud_w * point_cloud_h - scene_raycaster_done);
-            scene_raycaster_done = (scene_raycaster_done + done) % (point_cloud_w * point_cloud_h);
+
+            scene_raycaster_done = (scene_raycaster_done + count) % (point_cloud_w * point_cloud_h);
         }
 
         function onWindowResize() {
@@ -603,6 +648,7 @@
 
         function scene_render() {
             scene_renderer.render(scene, scene_camera);
+            //scene_stats.update();
         }
 
         function pc_scene_render() {
@@ -618,19 +664,25 @@
 
             scene_controls.update(); // only required if controls.enableDamping = true, or if controls.autoRotate = true
 
-            // do animation under the specific max fps
-            const now = Date.now();
-            const elapsed_ms = now - scene_renderer_timestamp_ms;
-            const interval_ms = 1000 / scene_renderer_fps;
-            if (elapsed_ms >= interval_ms) {
-                scene_renderer_timestamp_ms = now - (elapsed_ms % interval_ms);
+            // delta from last scene_animate call
+            const delta_ms = parseInt(scene_animation_clock.getDelta() * 1000, 10);
+
+            // elapsed time from the last actual render call
+            scene_renderer_elapsed_ms += delta_ms;
+            const interval_max_ms = parseInt(1000 / scene_renderer_max_fps, 10);
+
+            // calculating ray casting as often and as much as possible without huge performance penalty
+            scene_ray_cast( delta_ms );
+
+            // render scene under max. fps
+            if (scene_renderer_elapsed_ms >= interval_max_ms) {
+                scene_animation_update( scene_renderer_elapsed_ms );
+                scene_render();
+                scene_renderer_elapsed_ms = scene_renderer_elapsed_ms % interval_max_ms;
             }
             else {
                 return;
             }
-
-            scene_animation_update( elapsed_ms );
-            scene_render();
         }
 
         function pc_scene_animate() {
@@ -640,10 +692,8 @@
                 return;
             }
 
-            const elapsed_s = pc_scene_animation_clock.getDelta();
             pc_scene_controls.update(); // only required if controls.enableDamping = true, or if controls.autoRotate = true
 
-            pc_scene_animation_update( elapsed_s * 1000 );
             pc_scene_render();
         }
 
