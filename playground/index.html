@@ -34,7 +34,7 @@
                 <div id="xray_readout">TODO</div>
                 <div id="cam_readout">TODO</div>
                 <div id="cam_img"></div>
-                <div id="linac_sign">TODO</div>
+                <!-- <div id="linac_sign">TODO</div> -->
                 <div id="timeline">TODO</div>
                 <div id="warning_sign"></div>
                 <div id="statusbar"></div>
@@ -122,7 +122,7 @@
 
         const scene_raycaster_from = new THREE.Vector3(0, -1000, 1000); // where in scene camera is
         var raycaster = new THREE.Raycaster(scene_raycaster_from, new THREE.Vector3(), 100, scene_raycaster_from.length());
-        var rays_nr_per_ms; // XXX: estmated raycasting speed
+        var rays_nr_per_ms = 0.1; // estmated raycasting speed
         var scene_raycaster_done = 0; // how many rays are already done
         // ----------------
 
@@ -311,21 +311,25 @@
                             var local = scene_obj_patient_tumor.worldToLocal(new THREE.Vector3(0,0,0));
                             scene_obj_patient_tumor.position.set(local.x, local.y, local.z);
 
-                            // XXX: just make a guess of raycasting speed
-                            // make sure scene_obj_patient world matrix is updated properly
+                            // XXX: just make a guess of raycasting speed from probes
+                            // XXX: make sure scene_obj_patient world matrix is updated properly
+                            //      and locates around isocenter
                             scene_obj_patient.updateMatrixWorld(false);
                             {
                                 var clock = new THREE.Clock();
-                                clock.start();
                                 const probes = 5;
+                                clock.start();
                                 for (var tries=0; tries<probes; tries++) {
-                                    const scene_raycaster_dir = new THREE.Vector3(0, 0, 0).sub(scene_raycaster_from).normalize();
+                                    const scene_raycaster_dir = new THREE.Vector3(tries-probes/2, 0, 0).sub(scene_raycaster_from).normalize();
                                     raycaster.set(scene_raycaster_from, scene_raycaster_dir);
-                                    raycaster.intersectObject(scene_obj_patient, true);
+                                    var intersected = raycaster.intersectObject(scene_obj_patient, true);
+                                    if (intersected.length == 0) {
+                                        console.warn("raycastig probe", tries, "does not hit anything");
+                                    }
                                 }
                                 var delta_ms = clock.getDelta()*1000 / probes;
-                                rays_nr_per_ms = 10*(1/delta_ms)/6; // empirical guess...
-                                console.log("average raycast time: ", delta_ms, ". default rays_nr_per_ms: ", rays_nr_per_ms);
+                                rays_nr_per_ms = 10/(delta_ms*6); // empirical guess...
+                                console.log("Average raycast time:", delta_ms, " Default estimated rays_nr_per_ms:", rays_nr_per_ms);
                                 clock.stop();
                             }
 
