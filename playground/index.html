@@ -35,7 +35,7 @@
                 <div id="cam_readout">TODO</div>
                 <div id="cam_img"></div>
                 <!-- <div id="linac_sign">TODO</div> -->
-                <div id="timeline">TODO</div>
+                <div id="timeline">TODO</div><!-- http://bl.ocks.org/denisemauldin/ceb7065687c125223339a26a47d58a28 -->
                 <div id="warning_sign"></div>
                 <div id="statusbar"></div>
                 <div id="console">
@@ -728,8 +728,9 @@
         b_xray.style.background = b_xray_ready_color;
         b_repos.style.background = b_repos_off_color;
 
-        b_xray.onmousedown = function()
+        var action_trigger_xray = function(e)
         {
+            e.preventDefault();
             ctrl_pg_patient_last_xray_timestamp_ms = Date.now();
             b_xray.style.background = b_xray_active_color;
             ctrl_xray_triggerd = true;
@@ -755,7 +756,10 @@
                 }
             }, ctrl_xray_expose_time_ms);
         };
-        b_repos.onmouseup = function()
+        b_xray.addEventListener('mousedown', action_trigger_xray, { passiv: false } );
+        b_xray.addEventListener('touchstart', action_trigger_xray, { passiv: false } );
+
+        var action_releasing_couch_control = function()
         {
             if (wf_state == 'wf_s_couch_move') {
                 wf_state = 'wf_s_fusion';
@@ -763,7 +767,11 @@
                 b_repos.style.background = b_repos_ready_color;
             }
         }
-        b_repos.onmousedown = function()
+        b_repos.addEventListener('mouseup', action_releasing_couch_control, { passiv: false } );
+        b_repos.addEventListener('touchend', action_releasing_couch_control, { passiv: false } );
+        b_repos.addEventListener('touchcancel', action_releasing_couch_control, { passiv: false } );
+
+        var action_pressing_couch_control = function()
         {
             if (wf_state == 'wf_s_fusion') {
                 wf_state = 'wf_s_couch_move';
@@ -771,6 +779,9 @@
                 b_repos.style.background = b_repos_pressed_color;
             }
         };
+        b_repos.addEventListener('mousedown', action_pressing_couch_control, { passiv: false } );
+        b_repos.addEventListener('touchstart', action_pressing_couch_control, { passiv: false } );
+
         var text_ok = function() {
             statusbar.innerHTML = "Patient position is OK. You may take Xray images to verify patient position at any time.";
             warning_sign.innerHTML = "Radiation treatment is ongoing.";
